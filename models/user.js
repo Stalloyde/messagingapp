@@ -10,9 +10,10 @@ const userSchema = new Schema({
   contacts: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
   profilePic: { type: Object },
   messages: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Message' }],
+  contactsRequests: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
 });
 
-postSchema.virtual('postDateFormatted').get(function () {
+userSchema.virtual('postDateFormatted').get(function () {
   return DateTime.fromJSDate(this.date).toLocaleString(DateTime.TIME_SIMPLE);
 });
 

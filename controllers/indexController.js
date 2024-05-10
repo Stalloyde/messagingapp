@@ -1,6 +1,6 @@
+const passport = require('passport');
+const LocalStrategy = require('passport-local').Strategy;
 const User = require('../models/user');
-const mongoose = require('mongoose');
-const express = require('express');
 const expressAsyncHandler = require('express-async-handler');
 const { body, validationResult } = require('express-validator');
 const bcrypt = require('bcrypt');
@@ -10,8 +10,8 @@ exports.signupGET = async (req, res, next) => {
 };
 
 exports.signupPOST = [
-  body('username').notEmpty().trim().escape().withMessage('Username required'),
-  body('password').notEmpty().trim().escape().withMessage('Password required'),
+  body('username').notEmpty().trim().escape().withMessage('*Username required'),
+  body('password').notEmpty().trim().escape().withMessage('*Password required'),
   body('confirmPassword')
     .notEmpty()
     .trim()
@@ -33,11 +33,11 @@ exports.signupPOST = [
 
       errorsArray.forEach((error) => {
         if (error.path === 'username') {
-          jsonErrorResponses.usernameError = `*${error.msg}`;
+          jsonErrorResponses.usernameError = error.msg;
         } else if (error.path === 'password') {
-          jsonErrorResponses.passwordError = `*${error.msg}`;
+          jsonErrorResponses.passwordError = error.msg;
         } else {
-          jsonErrorResponses.confirmPasswordError = `*${error.msg}`;
+          jsonErrorResponses.confirmPasswordError = error.msg;
         }
       });
       return res.json(jsonErrorResponses);
@@ -71,13 +71,43 @@ exports.signupPOST = [
   }),
 ];
 
-exports.loginGET = async (req, res, next) => {
-  res.send('GET - Login page');
+exports.loginGET = (req, res, next) => {
+  const errorMessages = req.flash();
+  res.json(errorMessages);
 };
 
-exports.loginPOST = async (req, res, next) => {
-  res.send('POST - Login page');
-};
+exports.loginPOST = [
+  body('username').notEmpty().trim().escape().withMessage('*Username required'),
+  body('password').notEmpty().trim().escape().withMessage('*Password required'),
+
+  expressAsyncHandler(async (req, res, next) => {
+    const errors = validationResult(req);
+
+    const jsonErrorResponses = {
+      usernameError: null,
+      passwordError: null,
+    };
+
+    if (!errors.isEmpty()) {
+      const errorsArray = errors.array();
+
+      errorsArray.forEach((error) => {
+        if (error.path === 'username')
+          jsonErrorResponses.usernameError = error.msg;
+        if (error.path === 'password')
+          jsonErrorResponses.passwordError = error.msg;
+      });
+      return res.json(jsonErrorResponses);
+    }
+    next();
+  }),
+
+  passport.authenticate('local', {
+    failureRedirect: '/login',
+    failureFlash: true,
+  }),
+  (req, res) => res.redirect(`/`),
+];
 
 exports.homeGET = async (req, res, next) => {
   res.send(
