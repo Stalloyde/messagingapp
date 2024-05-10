@@ -110,27 +110,40 @@ exports.loginPOST = [
 ];
 
 exports.homeGET = async (req, res, next) => {
-  res.send(
-    'GET - Home Page. Get all contacts and most recent message. Should be authorized to access',
-  );
+  const currentUser = await User.findOne(req.user);
+  res.json(currentUser.contacts);
 };
 
 exports.contactRequestsGET = async (req, res, next) => {
-  res.send('GET - Page to add contacts. Should be authorized to access');
+  const currentUser = await User.findOne(req.user);
+  res.json(currentUser.contactsRequests);
 };
 
-exports.contactRequestsPOST = async (req, res, next) => {
-  res.send(
-    'POST - Search for username in the input. Should be authorized to access',
+exports.searchUsernamePOST = async (req, res, next) => {
+  const { username } = req.body;
+  const searchResult = await User.find({ username });
+  res.json(searchResult);
+};
+
+exports.addContactPOST = async (req, res, next) => {
+  res.json(
+    'POST - Add Contact.. search for id params and add user to contactRequest field. Should be authorized to access',
   );
 };
 
-//need a controller to handle sending contact request.. how to do?
-
 exports.idMessagesGET = async (req, res, next) => {
-  res.send('GET messages from userId. Should be authorized to access');
+  res.json('GET messages from userId. Should be authorized to access');
 };
 
 exports.idMessagesPOST = async (req, res, next) => {
-  res.send('POST messages to userId. Should be authorized to access');
+  res.json('POST messages to userId. Should be authorized to access');
+};
+
+exports.logout = (req, res, next) => {
+  req.logout((err) => {
+    if (err) {
+      return next(err);
+    }
+  });
+  res.redirect('/');
 };
