@@ -47,10 +47,10 @@ exports.signupPOST = [
       username: req.body.username,
       password: req.body.password,
       status: null,
-      contacts: null,
+      contacts: [],
       profilePic: null,
-      messages: null,
-      contactsRequests: null,
+      messages: [],
+      contactsRequests: [],
     });
 
     try {
@@ -116,19 +116,48 @@ exports.homeGET = async (req, res, next) => {
 
 exports.contactRequestsGET = async (req, res, next) => {
   const currentUser = await User.findOne(req.user);
-  res.json(currentUser.contactsRequests);
+  res.json([currentUser.contactsRequests, currentUser.contacts]);
 };
 
-exports.searchUsernamePOST = async (req, res, next) => {
-  const { username } = req.body;
-  const searchResult = await User.find({ username });
-  res.json(searchResult);
-};
+exports.searchUsernamePOST = [
+  body('username').notEmpty().trim().escape().withMessage('*Username required'),
+
+  expressAsyncHandler(async (req, res, next) => {
+    const errors = validationResult(req);
+
+    const jsonErrorResponses = {
+      usernameError: null,
+    };
+
+    if (!errors.isEmpty()) {
+      jsonErrorResponses.usernameError = errors.msg;
+      return res.json(jsonErrorResponses);
+    }
+
+    const { username } = req.body;
+    const searchResult = await User.find({ username });
+
+    if (searchResult.length < 1) return res.json('No results found');
+    return res.json(searchResult);
+  }),
+];
 
 exports.addContactPOST = async (req, res, next) => {
-  res.json(
-    'POST - Add Contact.. search for id params and add user to contactRequest field. Should be authorized to access',
-  );
+  const [currentUser, userToRequest] = await Promise.all([
+    User.findOne(req.user),
+    User.findById(req.params.id).populate('contactsRequests'),
+  ]);
+
+  const { contactsRequests } = userToRequest;
+
+  for (const request of contactsRequests) {
+    if (request.username === currentUser.username)
+      return res.json('Request has already been made');
+  }
+
+  contactsRequests.push(currentUser);
+  await userToRequest.save();
+  return res.json(userToRequest);
 };
 
 exports.idMessagesGET = async (req, res, next) => {
