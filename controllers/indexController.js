@@ -115,8 +115,8 @@ exports.homeGET = async (req, res, next) => {
 };
 
 exports.contactRequestsGET = async (req, res, next) => {
-  const currentUser = await User.findOne(req.user);
-  res.json([currentUser.contactsRequests, currentUser.contacts]);
+  const currentUser = await User.findOne(req.user).populate('contactsRequests');
+  res.json(currentUser.contactsRequests);
 };
 
 exports.searchUsernamePOST = [
@@ -136,13 +136,12 @@ exports.searchUsernamePOST = [
 
     const { username } = req.body;
     const searchResult = await User.find({ username });
-
     if (searchResult.length < 1) return res.json('No results found');
     return res.json(searchResult);
   }),
 ];
 
-exports.addContactPOST = async (req, res, next) => {
+exports.sendContactRequestPOST = async (req, res, next) => {
   const [currentUser, userToRequest] = await Promise.all([
     User.findOne(req.user),
     User.findById(req.params.id).populate('contactsRequests'),
@@ -150,14 +149,68 @@ exports.addContactPOST = async (req, res, next) => {
 
   const { contactsRequests } = userToRequest;
 
+  //check if request has already been made
   for (const request of contactsRequests) {
     if (request.username === currentUser.username)
       return res.json('Request has already been made');
   }
 
+  //check if already a contact
+  for (const contacts of currentUser.contacts) {
+    if (contacts._id.toString() === req.params.id)
+      return res.json('User is already in your contacts list.');
+  }
+
   contactsRequests.push(currentUser);
   await userToRequest.save();
   return res.json(userToRequest);
+};
+
+exports.handleRequestsPUT = async (req, res, next) => {
+  const currentUserId = req.user._id;
+  const currentUser = await User.findById(currentUserId).populate(
+    'contactsRequests',
+  );
+
+  const { contactsRequests } = currentUser;
+
+  for (const request of contactsRequests) {
+    if (
+      req.params.id === request._id.toString() &&
+      req.body.action === 'approve'
+    ) {
+      //add to contacts list
+      currentUser.contacts.push(request);
+
+      //remove from contactsRequest list
+      const targetIndex = contactsRequests.indexOf(request);
+      contactsRequests.splice(targetIndex, 1);
+
+      //add to contacts lists of requesting user
+      const requestingUser = await User.findById(request._id);
+      requestingUser.contacts.push(currentUser);
+
+      //remove from contactsRequest list of requesting user
+      const requestingTargetIndex =
+        requestingUser.contactsRequests.indexOf(currentUser);
+
+      requestingUser.contactsRequests.splice(requestingTargetIndex, 1);
+
+      await currentUser.save();
+      await requestingUser.save();
+      return res.json('Contact request approved!');
+    }
+
+    if (
+      req.params.id === request._id.toString() &&
+      req.body.action === 'reject'
+    ) {
+      const targetIndex = contactsRequests.indexOf(request);
+      contactsRequests.splice(targetIndex, 1);
+      await currentUser.save();
+      return res.json('Contact request rejected!');
+    }
+  }
 };
 
 exports.idMessagesGET = async (req, res, next) => {
