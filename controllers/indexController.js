@@ -161,6 +161,10 @@ exports.sendContactRequestPOST = async (req, res, next) => {
       return res.json('User is already in your contacts list.');
   }
 
+  //check if requesting to self
+  if (currentUser._id.toString() === req.params.id)
+    return res.json('Cannot send request to yourself');
+
   contactsRequests.push(currentUser);
   await userToRequest.save();
   return res.json(userToRequest);
@@ -168,9 +172,10 @@ exports.sendContactRequestPOST = async (req, res, next) => {
 
 exports.handleRequestsPUT = async (req, res, next) => {
   const currentUserId = req.user._id;
-  const currentUser = await User.findById(currentUserId).populate(
-    'contactsRequests',
-  );
+  const [currentUser, requestingUser] = await Promise.all([
+    User.findById(currentUserId).populate('contactsRequests'),
+    User.findById(req.params.id),
+  ]);
 
   const { contactsRequests } = currentUser;
 
@@ -179,15 +184,14 @@ exports.handleRequestsPUT = async (req, res, next) => {
       req.params.id === request._id.toString() &&
       req.body.action === 'approve'
     ) {
-      //add to contacts list
+      //add to currentUser's contacts list
       currentUser.contacts.push(request);
 
-      //remove from contactsRequest list
+      //remove from currentUser's contactsRequest list
       const targetIndex = contactsRequests.indexOf(request);
       contactsRequests.splice(targetIndex, 1);
 
       //add to contacts lists of requesting user
-      const requestingUser = await User.findById(request._id);
       requestingUser.contacts.push(currentUser);
 
       //remove from contactsRequest list of requesting user
@@ -205,9 +209,18 @@ exports.handleRequestsPUT = async (req, res, next) => {
       req.params.id === request._id.toString() &&
       req.body.action === 'reject'
     ) {
+      //remove from currentUser's contactsRequest list
       const targetIndex = contactsRequests.indexOf(request);
       contactsRequests.splice(targetIndex, 1);
+
+      //remove from contactsRequest list of requesting user
+      const requestingTargetIndex =
+        requestingUser.contactsRequests.indexOf(currentUser);
+
+      requestingUser.contactsRequests.splice(requestingTargetIndex, 1);
+
       await currentUser.save();
+      await requestingUser.save();
       return res.json('Contact request rejected!');
     }
   }
