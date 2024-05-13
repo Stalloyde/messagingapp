@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const { DateTime } = require('luxon');
 
 const { Schema } = mongoose;
 
@@ -9,7 +10,7 @@ const messageSchema = new Schema({
   date: { type: Date, required: true },
 });
 
-postSchema.virtual('messageDateFormatted').get(function () {
+messageSchema.virtual('messageDateFormatted').get(function () {
   return DateTime.fromJSDate(this.date).toLocaleString(DateTime.TIME_SIMPLE);
 });
 
