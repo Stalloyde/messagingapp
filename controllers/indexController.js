@@ -1,9 +1,11 @@
 const passport = require('passport');
 const LocalStrategy = require('passport-local').Strategy;
 const User = require('../models/user');
+const Message = require('../models/message');
 const expressAsyncHandler = require('express-async-handler');
 const { body, validationResult } = require('express-validator');
 const bcrypt = require('bcrypt');
+const he = require('he');
 
 exports.signupGET = async (req, res, next) => {
   res.send('GET - Sign Up page');
@@ -109,11 +111,6 @@ exports.loginPOST = [
   (req, res) => res.redirect(`/`),
 ];
 
-exports.homeGET = async (req, res, next) => {
-  const currentUser = await User.findOne(req.user);
-  res.json(currentUser.contacts);
-};
-
 exports.contactRequestsGET = async (req, res, next) => {
   const currentUser = await User.findOne(req.user).populate('contactsRequests');
   res.json(currentUser.contactsRequests);
@@ -200,8 +197,7 @@ exports.handleRequestsPUT = async (req, res, next) => {
 
       requestingUser.contactsRequests.splice(requestingTargetIndex, 1);
 
-      await currentUser.save();
-      await requestingUser.save();
+      await Promise.all([currentUser.save(), requestingUser.save()]);
       return res.json('Contact request approved!');
     }
 
@@ -219,8 +215,7 @@ exports.handleRequestsPUT = async (req, res, next) => {
 
       requestingUser.contactsRequests.splice(requestingTargetIndex, 1);
 
-      await currentUser.save();
-      await requestingUser.save();
+      await Promise.all([currentUser.save(), requestingUser.save()]);
       return res.json('Contact request rejected!');
     }
   }
@@ -242,8 +237,7 @@ exports.deleteContact = async (req, res, next) => {
       const targetUserIndex = targetUser.contacts.indexOf(currentUser);
       targetUser.contacts.splice(targetUserIndex, 1);
 
-      await currentUser.save();
-      await targetUser.save();
+      await Promise.all([currentUser.save(), targetUser.save()]);
 
       return res.json('Contact removed!');
     }
@@ -251,13 +245,71 @@ exports.deleteContact = async (req, res, next) => {
   }
 };
 
-exports.idMessagesGET = async (req, res, next) => {
-  res.json('GET messages from userId. Should be authorized to access');
+exports.homeGET = async (req, res, next) => {
+  const currentUser = await User.findOne(req.user).populate({
+    path: 'contacts',
+    populate: { path: 'username', path: 'messages' },
+  });
+
+  return res.json(currentUser.contacts);
 };
 
-exports.idMessagesPOST = async (req, res, next) => {
-  res.json('POST messages to userId. Should be authorized to access');
+exports.idMessagesGET = async (req, res, next) => {
+  const currentUser = await User.findOne(req.user).populate({
+    path: 'contacts',
+    populate: { path: 'username', path: 'messages' },
+  });
+  //check if trying to access self
+  if (req.params.id === currentUser._id.toString())
+    return res.json('Cannot access to self');
+
+  for (const contact of currentUser.contacts) {
+    if (contact._id.toString() === req.params.id) {
+      const targetMessages = contact.messages.sort((a, b) => b.date - a.date);
+      return res.json(targetMessages);
+    }
+  }
+  return res.json('No messages found');
 };
+
+exports.idMessagesPOST = [
+  body('newMessage').notEmpty().trim().escape().withMessage('Input required'),
+
+  expressAsyncHandler(async (req, res, next) => {
+    const [currentUser, recipient] = await Promise.all([
+      User.findOne(req.user).populate('messages'),
+      User.findById(req.params.id).populate('messages'),
+    ]);
+
+    const errors = validationResult(req);
+
+    if (!errors.isEmpty()) {
+      return res.json(errors);
+    } else {
+      //check if sending message to self
+      if (req.params.id === currentUser._id.toString())
+        return res.json('Cannot send message to self');
+
+      const newMessage = new Message({
+        from: req.user,
+        to: recipient,
+        content: he.decode(req.body.newMessage),
+        date: new Date(),
+      });
+
+      currentUser.messages.push(newMessage);
+      recipient.messages.push(newMessage);
+
+      await Promise.all([
+        newMessage.save(),
+        currentUser.save(),
+        recipient.save(),
+      ]);
+
+      return res.redirect(`/messages/${req.params.id}`);
+    }
+  }),
+];
 
 exports.logout = (req, res, next) => {
   req.logout((err) => {
