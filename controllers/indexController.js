@@ -226,6 +226,31 @@ exports.handleRequestsPUT = async (req, res, next) => {
   }
 };
 
+exports.deleteContact = async (req, res, next) => {
+  const [currentUser, targetUser] = await Promise.all([
+    User.findOne(req.user),
+    User.findById(req.params.id).populate('contacts'),
+  ]);
+
+  for (const contact of currentUser.contacts) {
+    if (contact._id.toString() === req.params.id) {
+      //remove from currentUser's contact list
+      const targetIndex = currentUser.contacts.indexOf(contact);
+      currentUser.contacts.splice(targetIndex, 1);
+
+      //remove currentUser from targetUser's contact list
+      const targetUserIndex = targetUser.contacts.indexOf(currentUser);
+      targetUser.contacts.splice(targetUserIndex, 1);
+
+      await currentUser.save();
+      await targetUser.save();
+
+      return res.json('Contact removed!');
+    }
+    return res.json('Contact not found!');
+  }
+};
+
 exports.idMessagesGET = async (req, res, next) => {
   res.json('GET messages from userId. Should be authorized to access');
 };

@@ -21,6 +21,7 @@ router.get('/requests', isAuth, indexController.contactRequestsGET);
 router.post('/requests', isAuth, indexController.searchUsernamePOST);
 router.post('/requests/:id', isAuth, indexController.sendContactRequestPOST);
 router.put('/requests/:id', isAuth, indexController.handleRequestsPUT);
+router.delete('/requests/:id', isAuth, indexController.deleteContact);
 router.get('/messages/:id', isAuth, indexController.idMessagesGET);
 router.post('/messages/:id', isAuth, indexController.idMessagesPOST);
 router.get('/logout', indexController.logout);
