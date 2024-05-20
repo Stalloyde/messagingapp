@@ -1,34 +1,27 @@
+require('dotenv').config();
 const passport = require('passport');
-const LocalStrategy = require('passport-local').Strategy;
-const bcrypt = require('bcrypt');
+const JwtStrategy = require('passport-jwt').Strategy;
+const { ExtractJwt } = require('passport-jwt');
 const User = require('../models/user');
 
-const localStrategyVerify = async (username, password, done) => {
+const options = {};
+options.secretOrKey = process.env.SECRET;
+options.jwtFromRequest = ExtractJwt.fromAuthHeaderAsBearerToken();
+
+const auth = async (jwtPayload, done) => {
+  console.log('Auth middleware is running');
   try {
-    console.log('verifying');
-    const user = await User.findOne({ username }).select('+password');
+    const user = await User.findOne({ id: jwtPayload.sub });
+
     if (!user) {
-      return done(null, false, { message: 'Incorrect username' });
+      return done(null, false);
     }
-    const match = await bcrypt.compare(password, user.password);
-    if (!match) {
-      return done(null, false, { message: 'Incorrect password' });
-    }
-    return done(null, user);
+    return done(null, jwtPayload);
   } catch (err) {
-    return done(err);
+    return done(err, false);
   }
 };
 
-const strategy = new LocalStrategy(localStrategyVerify);
-passport.use(strategy);
+const strategy = new JwtStrategy(options, auth);
 
-passport.serializeUser((user, done) => done(null, user.id));
-passport.deserializeUser(async (id, done) => {
-  try {
-    const user = await User.findById(id);
-    done(null, user);
-  } catch (err) {
-    return done(err);
-  }
-});
+passport.use(strategy);

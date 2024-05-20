@@ -1,13 +1,14 @@
 const passport = require('passport');
-const User = require('../models/user');
+const jwt = require('jsonwebtoken');
 const Message = require('../models/message');
 const expressAsyncHandler = require('express-async-handler');
 const { body, validationResult } = require('express-validator');
 const bcrypt = require('bcrypt');
 const he = require('he');
+const User = require('../models/user');
 
 exports.signupGET = async (req, res, next) => {
-  res.send('GET - Sign Up page');
+  return res.json({ message: 'GET - Sign Up page' });
 };
 
 exports.signupPOST = [
@@ -72,10 +73,7 @@ exports.signupPOST = [
   }),
 ];
 
-exports.loginGET = (req, res, next) => {
-  const errorMessages = req.flash();
-  res.json(errorMessages);
-};
+exports.loginGET = (req, res, next) => {};
 
 exports.loginPOST = [
   body('username').notEmpty().trim().escape().withMessage('*Username required'),
@@ -91,7 +89,6 @@ exports.loginPOST = [
 
     if (!errors.isEmpty()) {
       const errorsArray = errors.array();
-
       errorsArray.forEach((error) => {
         if (error.path === 'username')
           jsonErrorResponses.usernameError = error.msg;
@@ -100,14 +97,36 @@ exports.loginPOST = [
       });
       return res.json(jsonErrorResponses);
     }
-    next();
-  }),
 
-  passport.authenticate('local', {
-    failureRedirect: '/login',
-    failureFlash: true,
+    const user = await User.findOne({ username: req.body.username }).select(
+      '+password',
+    );
+
+    if (!user) {
+      jsonErrorResponses.usernameError = '*User not found';
+      return res.json(jsonErrorResponses);
+    }
+
+    const match = await bcrypt.compare(req.body.password, user.password);
+    if (!match) {
+      jsonErrorResponses.passwordError = '*Incorrect password';
+      return res.json(jsonErrorResponses);
+    }
+
+    jwt.sign(
+      { user },
+      process.env.SECRET,
+      { expiresIn: '1h', algorithm: 'HS256' },
+      (err, token) => {
+        if (err) {
+          throw Error(err);
+        } else {
+          const { username } = user;
+          return res.json({ username, Bearer: `Bearer ${token}` });
+        }
+      },
+    );
   }),
-  (req, res) => res.redirect(`/`),
 ];
 
 exports.contactRequestsGET = async (req, res, next) => {
@@ -151,7 +170,7 @@ exports.sendContactRequestPOST = async (req, res, next) => {
       return res.json('Request has already been made');
   }
 
-  //check if already a contact
+  //check if already a contact{r
   for (const contacts of currentUser.contacts) {
     if (contacts._id.toString() === req.params.id)
       return res.json('User is already in your contacts list.');
@@ -245,12 +264,12 @@ exports.deleteContact = async (req, res, next) => {
 };
 
 exports.homeGET = async (req, res, next) => {
-  const currentUser = await User.findOne(req.user).populate({
+  const currentUser = await User.findById(req.user.user._id).populate({
     path: 'contacts',
     populate: { path: 'username', path: 'messages' },
   });
-
-  return res.json(currentUser.contacts);
+  console.log(currentUser);
+  return res.json(currentUser);
 };
 
 exports.idMessagesGET = async (req, res, next) => {
@@ -315,6 +334,6 @@ exports.logout = (req, res, next) => {
     if (err) {
       return next(err);
     }
+    res.redirect('/');
   });
-  res.redirect('/');
 };

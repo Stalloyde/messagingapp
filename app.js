@@ -7,7 +7,6 @@ const cookieParser = require('cookie-parser');
 const logger = require('morgan');
 const passport = require('passport');
 const session = require('express-session');
-const flash = require('connect-flash');
 const cors = require('cors');
 
 const indexRouter = require('./routes/index');
@@ -19,6 +18,7 @@ const corsOptions = {
   origin: [
     //add deployed url here when in production
     'http://localhost:5173',
+    'http://localhost:5174',
     'http://localhost:3000',
   ],
   optionsSuccessStatus: 200,
@@ -33,10 +33,9 @@ app.use(
   session({
     secret: process.env.SECRET,
     resave: false,
-    saveUninitialized: true,
+    saveUninitialized: false,
   }),
 );
-app.use(flash());
 app.use(passport.initialize());
 app.use(passport.session());
 app.use(cors(corsOptions));
