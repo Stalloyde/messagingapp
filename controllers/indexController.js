@@ -266,14 +266,17 @@ exports.deleteContact = async (req, res, next) => {
 exports.homeGET = async (req, res, next) => {
   const currentUser = await User.findById(req.user.user._id).populate({
     path: 'contacts',
-    populate: { path: 'username', path: 'messages' },
+    populate: {
+      path: 'username',
+      path: 'messages',
+      options: { sort: { date: -1 } },
+    },
   });
-  console.log(currentUser);
   return res.json(currentUser);
 };
 
 exports.idMessagesGET = async (req, res, next) => {
-  const currentUser = await User.findOne(req.user).populate({
+  const currentUser = await User.findById(req.user.user._id).populate({
     path: 'contacts',
     populate: { path: 'username', path: 'messages' },
   });
@@ -295,7 +298,7 @@ exports.idMessagesPOST = [
 
   expressAsyncHandler(async (req, res, next) => {
     const [currentUser, recipient] = await Promise.all([
-      User.findOne(req.user).populate('messages'),
+      User.findById(req.user.user._id).populate('messages'),
       User.findById(req.params.id).populate('messages'),
     ]);
 
@@ -304,12 +307,13 @@ exports.idMessagesPOST = [
     if (!errors.isEmpty()) {
       return res.json(errors);
     } else {
+      console.log(currentUser._id);
       //check if sending message to self
       if (req.params.id === currentUser._id.toString())
         return res.json('Cannot send message to self');
 
       const newMessage = new Message({
-        from: req.user,
+        from: currentUser,
         to: recipient,
         content: he.decode(req.body.newMessage),
         date: new Date(),
