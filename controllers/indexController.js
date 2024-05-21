@@ -286,7 +286,7 @@ exports.idMessagesGET = async (req, res, next) => {
 
   for (const contact of currentUser.contacts) {
     if (contact._id.toString() === req.params.id) {
-      const targetMessages = contact.messages.sort((a, b) => b.date - a.date);
+      const targetMessages = contact.messages.sort((a, b) => a.date - b.date);
       return res.json({
         username: contact.username,
         profilePic: contact.profilePic,
