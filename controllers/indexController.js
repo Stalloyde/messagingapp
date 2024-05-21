@@ -287,7 +287,11 @@ exports.idMessagesGET = async (req, res, next) => {
   for (const contact of currentUser.contacts) {
     if (contact._id.toString() === req.params.id) {
       const targetMessages = contact.messages.sort((a, b) => b.date - a.date);
-      return res.json(targetMessages);
+      return res.json({
+        username: contact.username,
+        profilePic: contact.profilePic,
+        messages: targetMessages,
+      });
     }
   }
   return res.json('No messages found');
