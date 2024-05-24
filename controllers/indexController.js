@@ -60,7 +60,8 @@ exports.signupPOST = [
       const checkDuplicate = await User.findOne({ username });
 
       if (checkDuplicate) {
-        return res.json('*Username has been taken. Try another.');
+        jsonErrorResponses.usernameError = `Username is taken.`;
+        return res.json(jsonErrorResponses);
       }
 
       const hashedPassword = await bcrypt.hash(req.body.password, 10);
@@ -311,7 +312,6 @@ exports.idMessagesPOST = [
     if (!errors.isEmpty()) {
       return res.json(errors);
     } else {
-      console.log(currentUser._id);
       //check if sending message to self
       if (req.params.id === currentUser._id.toString())
         return res.json('Cannot send message to self');
