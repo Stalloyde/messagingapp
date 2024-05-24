@@ -131,8 +131,10 @@ exports.loginPOST = [
 ];
 
 exports.contactRequestsGET = async (req, res, next) => {
-  const currentUser = await User.findOne(req.user).populate('contactsRequests');
-  res.json(currentUser.contactsRequests);
+  const currentUser = await User.findById(req.user.user._id).populate(
+    'contactsRequests',
+  );
+  return res.json(currentUser);
 };
 
 exports.searchUsernamePOST = [
@@ -152,7 +154,10 @@ exports.searchUsernamePOST = [
 
     const { username } = req.body;
     const searchResult = await User.find({ username });
-    if (searchResult.length < 1) return res.json('No results found');
+    if (searchResult.length < 1) {
+      jsonErrorResponses.usernameError = 'Username does not exist';
+      return res.json(jsonErrorResponses);
+    }
     return res.json(searchResult);
   }),
 ];
