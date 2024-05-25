@@ -157,12 +157,19 @@ exports.searchUsernamePOST = [
       jsonErrorResponses.usernameError = 'Username is self';
       return res.json(jsonErrorResponses);
     }
+
     const searchResult = await User.find({ username });
     if (searchResult.length < 1) {
       jsonErrorResponses.usernameError = 'Username does not exist';
       return res.json(jsonErrorResponses);
     }
 
+    searchResult.forEach((result) => {
+      if (req.user.user.contactsRequests.includes(result._id.toString())) {
+        jsonErrorResponses.usernameError = 'Username does not exist';
+        return res.json(jsonErrorResponses);
+      }
+    });
     return res.json(searchResult);
   }),
 ];
@@ -181,7 +188,7 @@ exports.sendContactRequestPOST = async (req, res, next) => {
       return res.json('Request has already been made');
   }
 
-  //check if already a contact{r
+  //check if already a contact
   for (const contacts of currentUser.contacts) {
     if (contacts._id.toString() === req.params.id)
       return res.json('User is already in your contacts list.');
