@@ -153,18 +153,23 @@ exports.searchUsernamePOST = [
     }
 
     const { username } = req.body;
+    if (username === req.user.user.username) {
+      jsonErrorResponses.usernameError = 'Username is self';
+      return res.json(jsonErrorResponses);
+    }
     const searchResult = await User.find({ username });
     if (searchResult.length < 1) {
       jsonErrorResponses.usernameError = 'Username does not exist';
       return res.json(jsonErrorResponses);
     }
+
     return res.json(searchResult);
   }),
 ];
 
 exports.sendContactRequestPOST = async (req, res, next) => {
   const [currentUser, userToRequest] = await Promise.all([
-    User.findOne(req.user),
+    User.findById(req.user.user._id),
     User.findById(req.params.id).populate('contactsRequests'),
   ]);
 

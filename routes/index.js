@@ -23,7 +23,7 @@ router.get(
 router.post(
   '/requests',
   passport.authenticate('jwt', { session: false }),
-  indexController.searchUsernamePOST,
+  indexController.searchUser  namePOST,
 );
 
 router.post(
