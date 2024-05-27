@@ -131,9 +131,14 @@ exports.loginPOST = [
 ];
 
 exports.contactRequestsGET = async (req, res, next) => {
-  const currentUser = await User.findById(req.user.user._id).populate(
-    'contactsRequests',
-  );
+  const currentUser = await User.findById(req.user.user._id)
+    .populate('contactsRequests')
+    .populate({
+      path: 'contacts',
+      populate: {
+        path: 'username',
+      },
+    });
   return res.json(currentUser);
 };
 
@@ -166,7 +171,12 @@ exports.searchUsernamePOST = [
 
     searchResult.forEach((result) => {
       if (req.user.user.contactsRequests.includes(result._id.toString())) {
-        jsonErrorResponses.usernameError = 'Username does not exist';
+        jsonErrorResponses.usernameError = 'Request to username is pending';
+        return res.json(jsonErrorResponses);
+      }
+
+      if (req.user.user.contacts.includes(result._id.toString())) {
+        jsonErrorResponses.usernameError = 'Username is already a contact';
         return res.json(jsonErrorResponses);
       }
     });
