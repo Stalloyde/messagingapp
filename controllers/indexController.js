@@ -144,8 +144,9 @@ exports.contactRequestsGET = async (req, res, next) => {
 
 exports.searchUsernamePOST = [
   body('username').notEmpty().trim().escape().withMessage('*Username required'),
-
   expressAsyncHandler(async (req, res, next) => {
+    const currentUser = await User.findById(req.user.user._id);
+
     const errors = validationResult(req);
 
     const jsonErrorResponses = {
@@ -158,24 +159,29 @@ exports.searchUsernamePOST = [
     }
 
     const { username } = req.body;
-    if (username === req.user.user.username) {
+    if (username === currentUser.username) {
+      console.log('4');
+
       jsonErrorResponses.usernameError = 'Username is self';
       return res.json(jsonErrorResponses);
     }
 
     const searchResult = await User.find({ username });
     if (searchResult.length < 1) {
+      console.log('1');
       jsonErrorResponses.usernameError = 'Username does not exist';
       return res.json(jsonErrorResponses);
     }
 
     searchResult.forEach((result) => {
-      if (req.user.user.contactsRequests.includes(result._id.toString())) {
+      if (currentUser.contactsRequests.includes(result._id.toString())) {
+        console.log('2');
         jsonErrorResponses.usernameError = 'Request to username is pending';
         return res.json(jsonErrorResponses);
       }
 
-      if (req.user.user.contacts.includes(result._id.toString())) {
+      if (currentUser.contacts.includes(result._id.toString())) {
+        console.log(req.user.user);
         jsonErrorResponses.usernameError = 'Username is already a contact';
         return res.json(jsonErrorResponses);
       }
@@ -269,7 +275,7 @@ exports.handleRequestsPUT = async (req, res, next) => {
 
 exports.deleteContact = async (req, res, next) => {
   const [currentUser, targetUser] = await Promise.all([
-    User.findOne(req.user),
+    User.findById(req.user.user._id),
     User.findById(req.params.id).populate('contacts'),
   ]);
 
