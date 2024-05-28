@@ -160,28 +160,23 @@ exports.searchUsernamePOST = [
 
     const { username } = req.body;
     if (username === currentUser.username) {
-      console.log('4');
-
       jsonErrorResponses.usernameError = 'Username is self';
       return res.json(jsonErrorResponses);
     }
 
     const searchResult = await User.find({ username });
     if (searchResult.length < 1) {
-      console.log('1');
       jsonErrorResponses.usernameError = 'Username does not exist';
       return res.json(jsonErrorResponses);
     }
 
     searchResult.forEach((result) => {
       if (currentUser.contactsRequests.includes(result._id.toString())) {
-        console.log('2');
         jsonErrorResponses.usernameError = 'Request to username is pending';
         return res.json(jsonErrorResponses);
       }
 
       if (currentUser.contacts.includes(result._id.toString())) {
-        console.log(req.user.user);
         jsonErrorResponses.usernameError = 'Username is already a contact';
         return res.json(jsonErrorResponses);
       }
