@@ -215,7 +215,7 @@ exports.sendContactRequestPOST = async (req, res, next) => {
 };
 
 exports.handleRequestsPUT = async (req, res, next) => {
-  const currentUserId = req.user._id;
+  const currentUserId = req.user.user._id;
   const [currentUser, requestingUser] = await Promise.all([
     User.findById(currentUserId).populate('contactsRequests'),
     User.findById(req.params.id),
@@ -245,7 +245,7 @@ exports.handleRequestsPUT = async (req, res, next) => {
       requestingUser.contactsRequests.splice(requestingTargetIndex, 1);
 
       await Promise.all([currentUser.save(), requestingUser.save()]);
-      return res.json('Contact request approved!');
+      return res.json(contactsRequests);
     }
 
     if (
@@ -263,14 +263,14 @@ exports.handleRequestsPUT = async (req, res, next) => {
       requestingUser.contactsRequests.splice(requestingTargetIndex, 1);
 
       await Promise.all([currentUser.save(), requestingUser.save()]);
-      return res.json('Contact request rejected!');
+      return res.json(contactsRequests);
     }
   }
 };
 
 exports.deleteContact = async (req, res, next) => {
   const [currentUser, targetUser] = await Promise.all([
-    User.findById(req.user.user._id),
+    User.findById(req.user.user._id).populate('contacts'),
     User.findById(req.params.id).populate('contacts'),
   ]);
 
@@ -280,16 +280,21 @@ exports.deleteContact = async (req, res, next) => {
       const targetIndex = currentUser.contacts.indexOf(contact);
       currentUser.contacts.splice(targetIndex, 1);
 
+      //remove messages in currentUser that came from deletedUser
+      //remove messages in currentUser that goes to deletedUser
+
       //remove currentUser from targetUser's contact list
       const targetUserIndex = targetUser.contacts.indexOf(currentUser);
       targetUser.contacts.splice(targetUserIndex, 1);
 
-      await Promise.all([currentUser.save(), targetUser.save()]);
+      //remove messages in deletedUser that came from currentUser
+      //remove messages in deletedUser that goes to currentUser
 
-      return res.json('Contact removed!');
+      await Promise.all([currentUser.save(), targetUser.save()]);
+      return res.json(currentUser.contacts);
     }
-    return res.json('Contact not found!');
   }
+  return res.json('Contact not found!');
 };
 
 exports.homeGET = async (req, res, next) => {
