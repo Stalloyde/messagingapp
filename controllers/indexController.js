@@ -1,3 +1,4 @@
+const mongoose = require('mongoose');
 const passport = require('passport');
 const jwt = require('jsonwebtoken');
 const Message = require('../models/message');
@@ -280,15 +281,9 @@ exports.deleteContact = async (req, res, next) => {
       const targetIndex = currentUser.contacts.indexOf(contact);
       currentUser.contacts.splice(targetIndex, 1);
 
-      //remove messages in currentUser that came from deletedUser
-      //remove messages in currentUser that goes to deletedUser
-
       //remove currentUser from targetUser's contact list
       const targetUserIndex = targetUser.contacts.indexOf(currentUser);
       targetUser.contacts.splice(targetUserIndex, 1);
-
-      //remove messages in deletedUser that came from currentUser
-      //remove messages in deletedUser that goes to currentUser
 
       await Promise.all([currentUser.save(), targetUser.save()]);
       return res.json(currentUser.contacts);
@@ -298,14 +293,22 @@ exports.deleteContact = async (req, res, next) => {
 };
 
 exports.homeGET = async (req, res, next) => {
+  const currentUserObjectId = new mongoose.Types.ObjectId(req.user.user._id);
   const currentUser = await User.findById(req.user.user._id).populate({
     path: 'contacts',
-    populate: {
-      path: 'username',
-      path: 'messages',
-      options: { sort: { date: -1 } },
-    },
+    populate: [
+      {
+        path: 'messages',
+        match: {
+          $or: [{ from: currentUserObjectId }, { to: currentUserObjectId }],
+        },
+        options: {
+          sort: { date: -1 },
+        },
+      },
+    ],
   });
+
   return res.json(currentUser);
 };
 
@@ -320,7 +323,13 @@ exports.idMessagesGET = async (req, res, next) => {
 
   for (const contact of currentUser.contacts) {
     if (contact._id.toString() === req.params.id) {
-      const targetMessages = contact.messages.sort((a, b) => a.date - b.date);
+      const targetMessages = contact.messages
+        .sort((a, b) => a.date - b.date)
+        .filter(
+          (message) =>
+            message.from.toString() === currentUser._id.toString() ||
+            message.to.toString() === currentUser._id.toString(),
+        );
       return res.json({
         username: contact.username,
         profilePic: contact.profilePic,
