@@ -56,6 +56,4 @@ router.post(
   indexController.idMessagesPOST,
 );
 
-router.get('/logout', indexController.logout);
-
 module.exports = router;
