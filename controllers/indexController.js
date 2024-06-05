@@ -2,11 +2,13 @@ const mongoose = require('mongoose');
 const passport = require('passport');
 const jwt = require('jsonwebtoken');
 const Message = require('../models/message');
+const User = require('../models/user');
+const Group = require('../models/group');
+const GroupMessages = require('../models/groupMessages');
 const expressAsyncHandler = require('express-async-handler');
 const { body, validationResult } = require('express-validator');
 const bcrypt = require('bcrypt');
 const he = require('he');
-const User = require('../models/user');
 
 exports.signupGET = async (req, res, next) => {
   return res.json({ message: 'GET - Sign Up page' });
@@ -292,22 +294,68 @@ exports.deleteContact = async (req, res, next) => {
   return res.json('Contact not found!');
 };
 
+exports.groupGET = async (req, res, next) => {
+  const currentUser = await User.findById(req.user.user._id).populate(
+    'contacts',
+  );
+  return res.json(currentUser);
+};
+
+exports.groupPOST = [
+  body('groupName')
+    .notEmpty()
+    .trim()
+    .escape()
+    .withMessage('Group name required'),
+  body('checkedUsers.*').escape(),
+
+  async (req, res, next) => {
+    const errors = validationResult(req);
+
+    if (!errors.isEmpty()) {
+      return res.json(errors);
+    }
+
+    if (req.body.checkedUsers.length < 2)
+      return res.json('Need more participants to create a group');
+
+    const [currentUser, invitedParticipants] = await Promise.all([
+      User.findById(req.user.user._id),
+      User.find({
+        username: { $in: req.body.checkedUsers },
+      }),
+    ]);
+
+    const newGroup = new Group({
+      groupName: req.body.groupName,
+      participants: [currentUser, ...invitedParticipants],
+      messages: [],
+      profilePic: null,
+    });
+
+    await newGroup.save();
+    return res.json(`${req.body.groupName} successfully created!`);
+  },
+];
+
 exports.homeGET = async (req, res, next) => {
   const currentUserObjectId = new mongoose.Types.ObjectId(req.user.user._id);
-  const currentUser = await User.findById(req.user.user._id).populate({
-    path: 'contacts',
-    populate: [
-      {
-        path: 'messages',
-        match: {
-          $or: [{ from: currentUserObjectId }, { to: currentUserObjectId }],
+  const currentUser = await User.findById(req.user.user._id)
+    .populate({
+      path: 'contacts',
+      populate: [
+        {
+          path: 'messages',
+          match: {
+            $or: [{ from: currentUserObjectId }, { to: currentUserObjectId }],
+          },
+          options: {
+            sort: { date: -1 },
+          },
         },
-        options: {
-          sort: { date: -1 },
-        },
-      },
-    ],
-  });
+      ],
+    })
+    .populate('groups');
 
   return res.json(currentUser);
 };

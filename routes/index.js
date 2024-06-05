@@ -3,12 +3,6 @@ const passport = require('passport');
 const router = express.Router();
 const indexController = require('../controllers/indexController');
 
-router.get(
-  '/',
-  passport.authenticate('jwt', { session: false }),
-  indexController.homeGET,
-);
-
 router.get('/signup', indexController.signupGET);
 router.post('/signup', indexController.signupPOST);
 router.get('/login', indexController.loginGET);
@@ -42,6 +36,24 @@ router.delete(
   '/requests/:id',
   passport.authenticate('jwt', { session: false }),
   indexController.deleteContact,
+);
+
+router.get(
+  '/group',
+  passport.authenticate('jwt', { session: false }),
+  indexController.groupGET,
+);
+
+router.post(
+  '/group',
+  passport.authenticate('jwt', { session: false }),
+  indexController.groupPOST,
+);
+
+router.get(
+  '/',
+  passport.authenticate('jwt', { session: false }),
+  indexController.homeGET,
 );
 
 router.get(
