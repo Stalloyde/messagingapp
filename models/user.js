@@ -11,6 +11,13 @@ const userSchema = new Schema({
   profilePic: { type: Object },
   messages: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Message' }],
   contactsRequests: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
+  groups: [
+    {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Group',
+      required: true,
+    },
+  ],
 });
 
 userSchema.virtual('postDateFormatted').get(function () {
