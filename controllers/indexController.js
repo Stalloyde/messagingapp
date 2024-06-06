@@ -361,14 +361,21 @@ exports.homeGET = async (req, res, next) => {
 };
 
 exports.idMessagesGET = async (req, res, next) => {
-  const currentUser = await User.findById(req.user.user._id).populate({
-    path: 'contacts',
-    populate: { path: 'username', path: 'messages' },
-  });
+  const currentUser = await User.findById(req.user.user._id)
+    .populate({
+      path: 'groups',
+      populate: [{ path: 'participants' }, { path: 'messages' }],
+    })
+    .populate({
+      path: 'contacts',
+      populate: [{ path: 'username' }, { path: 'messages' }],
+    });
+
   //check if trying to access self
   if (req.params.id === currentUser._id.toString())
     return res.json('Cannot access to self');
 
+  //check if targetId is a contact
   for (const contact of currentUser.contacts) {
     if (contact._id.toString() === req.params.id) {
       const targetMessages = contact.messages
@@ -378,9 +385,30 @@ exports.idMessagesGET = async (req, res, next) => {
             message.from.toString() === currentUser._id.toString() ||
             message.to.toString() === currentUser._id.toString(),
         );
+
       return res.json({
         username: contact.username,
         profilePic: contact.profilePic,
+        messages: targetMessages,
+      });
+    }
+  }
+
+  //check if targetId is a group
+  for (const group of currentUser.groups) {
+    if (group._id.toString() === req.params.id) {
+      const targetMessages = group.messages
+        .sort((a, b) => a.date - b.date)
+        .filter(
+          (message) =>
+            message.from.toString() === currentUser._id.toString() ||
+            message.to.toString() === currentUser._id.toString(),
+        );
+
+      return res.json({
+        groupName: group.groupName,
+        participants: group.participants,
+        profilePic: group.profilePic,
         messages: targetMessages,
       });
     }
