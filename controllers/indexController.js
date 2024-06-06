@@ -364,7 +364,10 @@ exports.idMessagesGET = async (req, res, next) => {
   const currentUser = await User.findById(req.user.user._id)
     .populate({
       path: 'groups',
-      populate: [{ path: 'participants' }, { path: 'messages' }],
+      populate: [
+        { path: 'participants' },
+        { path: 'messages', populate: { path: 'from' } },
+      ],
     })
     .populate({
       path: 'contacts',
@@ -397,14 +400,7 @@ exports.idMessagesGET = async (req, res, next) => {
   //check if targetId is a group
   for (const group of currentUser.groups) {
     if (group._id.toString() === req.params.id) {
-      const targetMessages = group.messages
-        .sort((a, b) => a.date - b.date)
-        .filter(
-          (message) =>
-            message.from.toString() === currentUser._id.toString() ||
-            message.to.toString() === currentUser._id.toString(),
-        );
-
+      const targetMessages = group.messages.sort((a, b) => a.date - b.date);
       return res.json({
         groupName: group.groupName,
         participants: group.participants,
@@ -420,9 +416,10 @@ exports.idMessagesPOST = [
   body('newMessage').notEmpty().trim().escape().withMessage('Input required'),
 
   expressAsyncHandler(async (req, res, next) => {
-    const [currentUser, recipient] = await Promise.all([
+    const [currentUser, recipient, group] = await Promise.all([
       User.findById(req.user.user._id).populate('messages'),
       User.findById(req.params.id).populate('messages'),
+      Group.findById(req.params.id).populate('messages'),
     ]);
 
     const errors = validationResult(req);
@@ -434,21 +431,41 @@ exports.idMessagesPOST = [
       if (req.params.id === currentUser._id.toString())
         return res.json('Cannot send message to self');
 
-      const newMessage = new Message({
-        from: currentUser,
-        to: recipient,
-        content: he.decode(req.body.newMessage),
-        date: new Date(),
-      });
+      if (recipient && !group) {
+        const newMessage = new Message({
+          from: currentUser,
+          to: recipient,
+          content: he.decode(req.body.newMessage),
+          date: new Date(),
+        });
 
-      currentUser.messages.push(newMessage);
-      recipient.messages.push(newMessage);
+        currentUser.messages.push(newMessage);
+        recipient.messages.push(newMessage);
 
-      await Promise.all([
-        newMessage.save(),
-        currentUser.save(),
-        recipient.save(),
-      ]);
+        await Promise.all([
+          newMessage.save(),
+          currentUser.save(),
+          recipient.save(),
+        ]);
+      }
+
+      if (!recipient && group) {
+        const newGroupMessage = new GroupMessages({
+          from: currentUser,
+          to: group,
+          content: he.decode(req.body.newMessage),
+          date: new Date(),
+        });
+
+        currentUser.messages.push(newGroupMessage);
+        group.messages.push(newGroupMessage);
+
+        await Promise.all([
+          newGroupMessage.save(),
+          currentUser.save(),
+          group.save(),
+        ]);
+      }
 
       return res.redirect(`/messages/${req.params.id}`);
     }
