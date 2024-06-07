@@ -355,7 +355,15 @@ exports.homeGET = async (req, res, next) => {
         },
       ],
     })
-    .populate('groups');
+    .populate({
+      path: 'groups',
+      populate: {
+        path: 'messages',
+        options: {
+          sort: { date: -1 },
+        },
+      },
+    });
 
   return res.json(currentUser);
 };
