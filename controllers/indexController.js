@@ -320,7 +320,7 @@ exports.groupPOST = [
       return res.json('Need more participants to create a group');
 
     const [currentUser, invitedParticipants] = await Promise.all([
-      User.findById(req.user.user._id),
+      User.findById(req.user.user._id).populate('contacts'),
       User.find({
         username: { $in: req.body.checkedUsers },
       }),
@@ -333,10 +333,45 @@ exports.groupPOST = [
       profilePic: null,
     });
 
-    await newGroup.save();
-    return res.json(`${req.body.groupName} successfully created!`);
+    for (const participant of invitedParticipants) {
+      participant.groups.push(newGroup);
+      await participant.save();
+    }
+
+    currentUser.groups.push(newGroup);
+    await Promise.all([newGroup.save(), currentUser.save()]);
+
+    return res.json(currentUser);
   },
 ];
+
+exports.exitGroup = async (req, res, next) => {
+  const [currentUser, group] = await Promise.all([
+    User.findById(req.user.user._id),
+    Group.findById(req.params.id),
+  ]);
+  const { participants } = group;
+  const { groups } = currentUser;
+
+  //remove currentUser from groups participants
+  const updatedParticipants = participants.filter(
+    (participant) => participant.toString() !== currentUser._id.toString(),
+  );
+  group.participants = updatedParticipants;
+
+  if (group.participants.length < 1) {
+    await group.deleteOne({ _id: req.params.id });
+  } else {
+    group.save();
+  }
+
+  //remove group from currentUser's users group
+  const updatedGroups = groups.filter(
+    (group) => group.toString() !== req.params.id,
+  );
+  currentUser.groups = updatedGroups;
+  await currentUser.save();
+};
 
 exports.homeGET = async (req, res, next) => {
   const currentUserObjectId = new mongoose.Types.ObjectId(req.user.user._id);
@@ -364,7 +399,6 @@ exports.homeGET = async (req, res, next) => {
         },
       },
     });
-
   return res.json(currentUser);
 };
 

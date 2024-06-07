@@ -50,6 +50,12 @@ router.post(
   indexController.groupPOST,
 );
 
+router.put(
+  '/messages/:id/exit-group',
+  passport.authenticate('jwt', { session: false }),
+  indexController.exitGroup,
+);
+
 router.get(
   '/',
   passport.authenticate('jwt', { session: false }),
