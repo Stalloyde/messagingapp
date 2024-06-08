@@ -333,13 +333,15 @@ exports.groupPOST = [
       profilePic: null,
     });
 
+    await newGroup.save();
+
     for (const participant of invitedParticipants) {
-      participant.groups.push(newGroup);
+      participant.groups.push(newGroup._id);
       await participant.save();
     }
 
-    currentUser.groups.push(newGroup);
-    await Promise.all([newGroup.save(), currentUser.save()]);
+    currentUser.groups.push(newGroup._id);
+    await currentUser.save();
 
     return res.json(currentUser);
   },
