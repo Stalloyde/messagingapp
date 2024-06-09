@@ -342,7 +342,6 @@ exports.groupPOST = [
 
     currentUser.groups.push(newGroup._id);
     await currentUser.save();
-
     return res.json(currentUser);
   },
 ];
@@ -373,6 +372,8 @@ exports.exitGroup = async (req, res, next) => {
   );
   currentUser.groups = updatedGroups;
   await currentUser.save();
+
+  return res.json(currentUser);
 };
 
 exports.homeGET = async (req, res, next) => {
