@@ -271,26 +271,32 @@ exports.handleRequestsPUT = async (req, res, next) => {
   }
 };
 
+//bug that sometimes occur. Target user deleted from currentUser's contact list, but currentUser not deleted from targetUser's contact list
 exports.deleteContact = async (req, res, next) => {
   const [currentUser, targetUser] = await Promise.all([
     User.findById(req.user.user._id).populate('contacts'),
     User.findById(req.params.id).populate('contacts'),
   ]);
 
-  for (const contact of currentUser.contacts) {
-    if (contact._id.toString() === req.params.id) {
-      //remove from currentUser's contact list
-      const targetIndex = currentUser.contacts.indexOf(contact);
-      currentUser.contacts.splice(targetIndex, 1);
+  // Remove targetUser from currentUser's contact list
+  const contactIndex = currentUser.contacts.findIndex(
+    (contact) => contact._id.toString() === req.params.id,
+  );
+  if (contactIndex > -1) {
+    currentUser.contacts.splice(contactIndex, 1);
 
-      //remove currentUser from targetUser's contact list
-      const targetUserIndex = targetUser.contacts.indexOf(currentUser);
-      targetUser.contacts.splice(targetUserIndex, 1);
-
-      await Promise.all([currentUser.save(), targetUser.save()]);
-      return res.json(currentUser.contacts);
+    // Remove currentUser from targetUser's contact list
+    const currentUserIndex = targetUser.contacts.findIndex(
+      (contact) => contact._id.toString() === currentUser._id.toString(),
+    );
+    if (currentUserIndex > -1) {
+      targetUser.contacts.splice(currentUserIndex, 1);
     }
+
+    await Promise.all([currentUser.save(), targetUser.save()]);
+    return res.json(currentUser.contacts);
   }
+
   return res.json('Contact not found!');
 };
 
