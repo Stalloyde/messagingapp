@@ -74,4 +74,10 @@ router.post(
   indexController.idMessagesPOST,
 );
 
+router.put(
+  '/editProfile',
+  passport.authenticate('jwt', { session: false }),
+  indexController.editProfile,
+);
+
 module.exports = router;

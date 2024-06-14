@@ -51,7 +51,7 @@ exports.signupPOST = [
     let newUser = new User({
       username: req.body.username,
       password: req.body.password,
-      status: null,
+      status: 'Hello!',
       contacts: [],
       profilePic: null,
       messages: [],
@@ -513,6 +513,29 @@ exports.idMessagesPOST = [
       }
 
       return res.redirect(`/messages/${req.params.id}`);
+    }
+  }),
+];
+
+exports.editProfile = [
+  body('newUsername').notEmpty().trim().escape().withMessage('Input required'),
+  body('newStatus').notEmpty().trim().escape().withMessage('Input required'),
+
+  expressAsyncHandler(async (req, res, next) => {
+    const errors = validationResult(req);
+
+    if (!errors.isEmpty()) {
+      return res.json(errors);
+    } else {
+      const currentUser = await User.findByIdAndUpdate(
+        req.user.user._id,
+        {
+          username: req.body.newUsername,
+          status: req.body.newStatus,
+        },
+        { new: true },
+      );
+      return res.json(currentUser);
     }
   }),
 ];
