@@ -10,7 +10,6 @@ const session = require('express-session');
 const cors = require('cors');
 
 const indexRouter = require('./routes/index');
-const usersRouter = require('./routes/users');
 
 const app = express();
 
@@ -42,6 +41,5 @@ app.use(cors(corsOptions));
 app.options('*', cors());
 
 app.use('/', indexRouter);
-app.use('/users', usersRouter);
 
 module.exports = app;
