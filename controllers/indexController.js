@@ -248,7 +248,7 @@ exports.handleRequestsPUT = async (req, res, next) => {
       requestingUser.contactsRequests.splice(requestingTargetIndex, 1);
 
       await Promise.all([currentUser.save(), requestingUser.save()]);
-      return res.json(contactsRequests);
+      return res.json(currentUser);
     }
 
     if (
@@ -266,7 +266,7 @@ exports.handleRequestsPUT = async (req, res, next) => {
       requestingUser.contactsRequests.splice(requestingTargetIndex, 1);
 
       await Promise.all([currentUser.save(), requestingUser.save()]);
-      return res.json(contactsRequests);
+      return res.json(currentUser);
     }
   }
 };
@@ -282,6 +282,7 @@ exports.deleteContact = async (req, res, next) => {
   const contactIndex = currentUser.contacts.findIndex(
     (contact) => contact._id.toString() === req.params.id,
   );
+
   if (contactIndex > -1) {
     currentUser.contacts.splice(contactIndex, 1);
 
@@ -289,12 +290,13 @@ exports.deleteContact = async (req, res, next) => {
     const currentUserIndex = targetUser.contacts.findIndex(
       (contact) => contact._id.toString() === currentUser._id.toString(),
     );
+
     if (currentUserIndex > -1) {
       targetUser.contacts.splice(currentUserIndex, 1);
     }
 
     await Promise.all([currentUser.save(), targetUser.save()]);
-    return res.json(currentUser.contacts);
+    return res.json(currentUser);
   }
 
   return res.json('Contact not found!');
@@ -537,7 +539,7 @@ exports.editProfile = [
         req.user.user._id,
         {
           username: req.body.newUsername,
-          status: req.body.newStatus,
+          status: he.decode(req.body.newStatus),
         },
         { new: true },
       );
