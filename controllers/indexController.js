@@ -8,6 +8,7 @@ const GroupMessages = require('../models/groupMessages');
 const expressAsyncHandler = require('express-async-handler');
 const { body, validationResult } = require('express-validator');
 const bcrypt = require('bcrypt');
+const uploadImage = require('../config/cloudinary.js');
 const he = require('he');
 
 exports.signupGET = async (req, res, next) => {
@@ -442,9 +443,10 @@ exports.idMessagesGET = async (req, res, next) => {
             message.to.toString() === currentUser._id.toString(),
         );
 
+      console.log(contact.profilePic);
       return res.json({
         username: contact.username,
-        profilePic: contact.profilePic,
+        profilePic: contact.profilePic ? contact.profilePic.url : null,
         messages: targetMessages,
       });
     }
@@ -540,6 +542,7 @@ exports.editProfile = [
         {
           username: req.body.newUsername,
           status: he.decode(req.body.newStatus),
+          profilePic: req.file ? await uploadImage(req.file.path) : null,
         },
         { new: true },
       );

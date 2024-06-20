@@ -1,6 +1,8 @@
 const express = require('express');
 const passport = require('passport');
 const router = express.Router();
+const multer = require('multer');
+const upload = multer({ dest: 'public/images/uploads/' });
 const indexController = require('../controllers/indexController');
 
 router.get('/signup', indexController.signupGET);
@@ -77,6 +79,7 @@ router.post(
 router.put(
   '/editProfile',
   passport.authenticate('jwt', { session: false }),
+  upload.single('newProfilePic'),
   indexController.editProfile,
 );
 
