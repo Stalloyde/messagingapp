@@ -443,7 +443,6 @@ exports.idMessagesGET = async (req, res, next) => {
             message.to.toString() === currentUser._id.toString(),
         );
 
-      console.log(contact.profilePic);
       return res.json({
         username: contact.username,
         profilePic: contact.profilePic ? contact.profilePic.url : null,
