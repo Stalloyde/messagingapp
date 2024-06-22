@@ -436,7 +436,7 @@ exports.idMessagesGET = async (req, res, next) => {
   for (const contact of currentUser.contacts) {
     if (contact._id.toString() === req.params.id) {
       const targetMessages = contact.messages
-        .sort((a, b) => a.date - b.date)
+        .sort((a, b) => b.date - a.date)
         .filter(
           (message) =>
             message.from.toString() === currentUser._id.toString() ||
@@ -454,7 +454,7 @@ exports.idMessagesGET = async (req, res, next) => {
   //check if targetId is a group
   for (const group of currentUser.groups) {
     if (group._id.toString() === req.params.id) {
-      const targetMessages = group.messages.sort((a, b) => a.date - b.date);
+      const targetMessages = group.messages.sort((a, b) => b.date - a.date);
       return res.json({
         groupName: group.groupName,
         participants: group.participants,
