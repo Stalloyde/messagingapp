@@ -57,7 +57,7 @@ app.options('*', cors());
 const io = new Server(server, {
   cors: {
     origin: [
-      //add deployed url here when in production
+      'https://messagingapp-client.vercel.app/',
       'http://localhost:5173',
       'http://localhost:5174',
       'http://localhost:3000',
