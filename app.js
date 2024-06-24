@@ -62,6 +62,8 @@ const io = new Server(server, {
       'http://localhost:5174',
       'http://localhost:3000',
     ],
+    methods: ['GET', 'POST'],
+    credentials: true,
   },
 });
 
