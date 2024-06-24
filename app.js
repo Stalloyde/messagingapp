@@ -26,7 +26,7 @@ const limiter = RateLimit({
 
 const corsOptions = {
   origin: [
-    'https://messagingapp-client.vercel.app/',
+    'https://messagingapp-client.vercel.app',
     'http://localhost:5173',
     'http://localhost:5174',
     'http://localhost:3000',
@@ -57,7 +57,7 @@ app.options('*', cors());
 const io = new Server(server, {
   cors: {
     origin: [
-      'https://messagingapp-client.vercel.app/',
+      'https://messagingapp-client.vercel.app',
       'http://localhost:5173',
       'http://localhost:5174',
       'http://localhost:3000',
