@@ -11,7 +11,6 @@ const passport = require('passport');
 const session = require('express-session');
 const cors = require('cors');
 const http = require('http');
-const { Server } = require('socket.io');
 
 const indexRouter = require('./routes/index');
 
@@ -53,29 +52,6 @@ app.use(passport.initialize());
 app.use(passport.session());
 app.use(cors(corsOptions));
 app.options('*', cors());
-
-const io = new Server(server, {
-  cors: {
-    origin: [
-      'https://messagingapp-client.vercel.app',
-      'http://localhost:5173',
-      'http://localhost:5174',
-      'http://localhost:3000',
-    ],
-    methods: ['GET', 'POST'],
-  },
-});
-
-io.on('connection', (socket) => {
-  console.log('User connected', socket.id);
-  socket.on('joinRoom', (data) => {
-    socket.join(data.room);
-  });
-
-  socket.on('sendMessage', (data) => {
-    socket.in(data.room).emit('receiveMessage', data);
-  });
-});
 
 app.use('/', indexRouter);
 
