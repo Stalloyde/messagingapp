@@ -445,7 +445,7 @@ exports.idMessagesGET = async (req, res, next) => {
 
       return res.json({
         username: contact.username,
-        profilePic: contact.profilePic ? contact.profilePic.url : null,
+        profilePic: contact.profilePic ? contact.profilePic : null,
         messages: targetMessages,
       });
     }
