@@ -1,8 +1,8 @@
 # LINK TO LIVE APP: https://messagingapp-client.vercel.app/
 
-This is the backend repo of a full-stack chat messaging app. Built with:
+This is the client-side repo of a full-stack messaging app with real-time chat feature. Built with:
 
-Front-end: React + Typescript
+Front-end: React + Typescript + Socket.io
 Back-end: NodeJS + Express
 Database: MongoDB
 
@@ -20,6 +20,3 @@ password: 123
 Username: user
 password: 123
 ```
-
-# Plans Moving Forward
-To integrate socket.io to the project, enabling real-time chat.
