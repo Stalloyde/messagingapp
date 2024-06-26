@@ -11,6 +11,7 @@ const passport = require('passport');
 const session = require('express-session');
 const cors = require('cors');
 const http = require('http');
+const { Server } = require('socket.io');
 
 const indexRouter = require('./routes/index');
 
@@ -25,10 +26,7 @@ const limiter = RateLimit({
 
 const corsOptions = {
   origin: [
-<<<<<<< HEAD
-=======
     //add deployed url here when in production
->>>>>>> socketio
     'https://messagingapp-client.vercel.app',
     'http://localhost:5173',
     'http://localhost:5174',
@@ -69,6 +67,7 @@ const io = new Server(server, {
     methods: ['GET', 'POST'],
   },
 });
+
 io.on('connection', (socket) => {
   console.log('User connected', socket.id);
 
