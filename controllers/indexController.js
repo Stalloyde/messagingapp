@@ -1,3 +1,4 @@
+require('dotenv').config();
 const mongoose = require('mongoose');
 const passport = require('passport');
 const jwt = require('jsonwebtoken');
@@ -10,6 +11,7 @@ const { body, validationResult } = require('express-validator');
 const bcrypt = require('bcrypt');
 const uploadImage = require('../config/cloudinary.js');
 const he = require('he');
+const fetch = require('node-fetch');
 
 exports.signupGET = async (req, res, next) => {
   return res.json({ message: 'GET - Sign Up page' });
@@ -133,6 +135,10 @@ exports.loginPOST = [
     );
   }),
 ];
+
+exports.test = async (req, res, next) => {
+  res.redirect('http://localhost:5173');
+};
 
 exports.contactRequestsGET = async (req, res, next) => {
   const currentUser = await User.findById(req.user.user._id)
