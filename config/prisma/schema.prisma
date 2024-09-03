@@ -49,7 +49,7 @@ model User {
   status                String?
   contacts              User[]                  @relation("contacts")                  
   contactsOf            User[]                  @relation("contacts")
-  profilePic            Pr       
+  profilePic            String?
   messagesOut           Message[]               @relation("from")
   messagesIn            Message[]               @relation("to")
   contactsRequestsFrom  ContactsRequests[]      @relation("contactsRequestsTo")
