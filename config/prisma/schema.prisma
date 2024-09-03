@@ -6,6 +6,7 @@
 
 generator client {
   provider = "prisma-client-js"
+  previewFeatures = ["omitApi", "referentialActions"]
 }
 
 datasource db {
@@ -14,21 +15,21 @@ datasource db {
 }
 
 model Group {
-  id            Int     @id @default(autoincrement())
+  id            Int             @id @default(autoincrement())
   groupName     String  
-  participants  User[]
-  messages      GroupMessages[]
+  participants  User[]         
+  messages      GroupMessages[] 
   ProfilePic    String?
 }
 
 model GroupMessages {
-  id        Int               @id @default(autoincrement())
-  from      User              @relation(fields:[userId], references: [id])
-  userId    Int
-  to        Group             @relation(fields:[groupId], references: [id], onDelete:Cascade)
-  groupId   Int
-  content   String
-  date      DateTime          @default(now())
+  id          Int       @id @default(autoincrement())
+  from        User      @relation(fields:[userIdFrom], references: [id])
+  userIdFrom  Int
+  to          Group     @relation(fields:[groupIdTo], references: [id], onDelete:Cascade)
+  groupIdTo   Int
+  content     String
+  date        DateTime  @default(now())
 }
 
 model Message {
@@ -42,18 +43,26 @@ model Message {
 }
 
 model User {
-  id                Int           @id @default(autoincrement())
-  username          String        @unique
-  password          String
-  status            String?
-  contacts          User[]        @relation("userContacts")
-  profilePic        String?
-  messagesOut       Message[]     @relation("from")
-  messagesIn        Message[]     @relation("to")
-  contactsRequests  User[]        @relation("userContacts")
-  groups            Group[]
-  GroupMessages     GroupMessages[]
+  id                    Int                     @id @default(autoincrement())
+  username              String                  @unique
+  password              String
+  status                String?
+  contacts              User[]                  @relation("contacts")                  
+  contactsOf            User[]                  @relation("contacts")
+  profilePic            Pr       
+  messagesOut           Message[]               @relation("from")
+  messagesIn            Message[]               @relation("to")
+  contactsRequestsFrom  ContactsRequests[]      @relation("contactsRequestsTo")
+  contactsRequestsTo    ContactsRequests[]      @relation("contactsRequestsFrom")
+  groups                Group[]                           
+  GroupMessages         GroupMessages[]
+
 }
 
-
-
+model ContactsRequests {
+  id          Int      @id @default(autoincrement())
+  from        User     @relation("contactsRequestsFrom", fields:[userIdFrom], references: [id], onDelete:Cascade)
+  userIdFrom  Int   
+  to          User     @relation("contactsRequestsTo", fields:[userIdTo], references: [id], onDelete:Cascade)
+  userIdTo    Int   
+}

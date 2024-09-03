@@ -1,28 +1,42 @@
 require('dotenv').config();
-const mongoose = require('mongoose');
+const { PrismaClient } = require('@prisma/client');
+const prisma = new PrismaClient({
+  omit: {
+    user: {
+      password: true,
+    },
+  },
+}).$extends({
+  result: {
+    user: {
+      messages: {
+        needs: { messagesIn: true, messagesOut: true },
+        compute(user) {
+          const allMessages = [...user.messagesIn, ...user.messagesOut];
+          return allMessages.sort((a, b) => b.date - a.date);
+        },
+      },
+    },
+  },
+});
 const passport = require('passport');
 const jwt = require('jsonwebtoken');
-const Message = require('../models/message');
-const User = require('../models/user');
-const Group = require('../models/group');
-const GroupMessages = require('../models/groupMessages');
 const expressAsyncHandler = require('express-async-handler');
 const { body, validationResult } = require('express-validator');
 const bcrypt = require('bcrypt');
 const uploadImage = require('../config/cloudinary.js');
 const he = require('he');
-const fetch = require('node-fetch');
 
 exports.signupGET = async (req, res, next) => {
   return res.json({ message: 'GET - Sign Up page' });
 };
 
 exports.signupPOST = [
-  body('username').notEmpty().trim().escape().withMessage('*Username required'),
-  body('password').notEmpty().trim().escape().withMessage('*Password required'),
+  body('username').trim().notEmpty().escape().withMessage('*Username required'),
+  body('password').trim().notEmpty().escape().withMessage('*Password required'),
   body('confirmPassword')
-    .notEmpty()
     .trim()
+    .notEmpty()
     .custom((value, { req }) => value === req.body.password)
     .escape()
     .withMessage('Passwords do not match'),
@@ -51,19 +65,17 @@ exports.signupPOST = [
       return res.json(jsonErrorResponses);
     }
 
-    let newUser = new User({
+    let newUser = {
       username: req.body.username,
       password: req.body.password,
       status: 'Hello!',
-      contacts: [],
-      profilePic: null,
-      messages: [],
-      contactsRequests: [],
-    });
+    };
 
     try {
       const { username } = newUser;
-      const checkDuplicate = await User.findOne({ username });
+      const checkDuplicate = await prisma.user.findUnique({
+        where: { username: username },
+      });
 
       if (checkDuplicate) {
         jsonErrorResponses.usernameError = `Username is taken.`;
@@ -72,7 +84,8 @@ exports.signupPOST = [
 
       const hashedPassword = await bcrypt.hash(req.body.password, 10);
       newUser.password = hashedPassword;
-      await newUser.save();
+      await prisma.user.create({ data: newUser });
+
       return res.json('Sign up successful!');
     } catch (err) {
       return next(err);
@@ -80,18 +93,15 @@ exports.signupPOST = [
   }),
 ];
 
-exports.loginGET = (req, res, next) => {};
-
 exports.loginPOST = [
-  body('username').notEmpty().trim().escape().withMessage('*Username required'),
-  body('password').notEmpty().trim().escape().withMessage('*Password required'),
+  body('username').trim().notEmpty().escape().withMessage('*Username required'),
+  body('password').trim().notEmpty().escape().withMessage('*Password required'),
 
   expressAsyncHandler(async (req, res, next) => {
     const errors = validationResult(req);
-
     const jsonErrorResponses = {
-      usernameError: null,
       passwordError: null,
+      usernameError: null,
     };
 
     if (!errors.isEmpty()) {
@@ -105,9 +115,10 @@ exports.loginPOST = [
       return res.json(jsonErrorResponses);
     }
 
-    const user = await User.findOne({ username: req.body.username }).select(
-      '+password',
-    );
+    const user = await prisma.user.findUnique({
+      where: { username: req.body.username },
+      select: { id: true, username: true, password: true },
+    });
 
     if (!user) {
       jsonErrorResponses.usernameError = '*User not found';
@@ -136,26 +147,30 @@ exports.loginPOST = [
   }),
 ];
 
-exports.test = async (req, res, next) => {
-  res.redirect('http://localhost:5173');
-};
-
 exports.contactRequestsGET = async (req, res, next) => {
-  const currentUser = await User.findById(req.user.user._id)
-    .populate('contactsRequests')
-    .populate({
-      path: 'contacts',
-      populate: {
-        path: 'username',
-      },
-    });
+  const currentUser = await prisma.user.findUnique({
+    where: { id: req.user.user.id },
+    include: {
+      contactsRequestsFrom: { include: { from: true } },
+      contactsRequestsTo: { include: { to: true } },
+      contacts: true,
+    },
+  });
   return res.json(currentUser);
 };
 
 exports.searchUsernamePOST = [
-  body('username').notEmpty().trim().escape().withMessage('*Username required'),
+  body('username').trim().notEmpty().escape().withMessage('*Username required'),
+
   expressAsyncHandler(async (req, res, next) => {
-    const currentUser = await User.findById(req.user.user._id);
+    const currentUser = await prisma.user.findUnique({
+      where: { id: req.user.user.id },
+      include: {
+        contactsRequestsFrom: true,
+        contacts: true,
+        contactsRequestsTo: true,
+      },
+    });
 
     const errors = validationResult(req);
 
@@ -174,279 +189,410 @@ exports.searchUsernamePOST = [
       return res.json(jsonErrorResponses);
     }
 
-    const searchResult = await User.find({ username });
-    if (searchResult.length < 1) {
+    const searchResult = await prisma.user.findUnique({
+      where: { username: username },
+      include: {
+        contactsRequestsFrom: true,
+        contactsRequestsTo: true,
+        contacts: true,
+      },
+    });
+
+    //check if username exists
+    if (!searchResult) {
       jsonErrorResponses.usernameError = 'Username does not exist';
       return res.json(jsonErrorResponses);
     }
 
-    searchResult.forEach((result) => {
-      if (currentUser.contactsRequests.includes(result._id.toString())) {
-        jsonErrorResponses.usernameError = 'Request to username is pending';
-        return res.json(jsonErrorResponses);
-      }
+    //check if a request for connection has already been made to username
+    const contactsRequestTo = currentUser.contactsRequestsTo;
+    const requestSent = contactsRequestTo.some(
+      (result) => result.userIdTo === searchResult.id,
+    );
 
-      if (currentUser.contacts.includes(result._id.toString())) {
-        jsonErrorResponses.usernameError = 'Username is already a contact';
-        return res.json(jsonErrorResponses);
-      }
-    });
-    return res.json(searchResult);
+    if (requestSent) {
+      jsonErrorResponses.usernameError = 'Request has been made to username';
+      return res.json(jsonErrorResponses);
+    }
+
+    //check if request has been received by username and pending approval
+    const contactsRequestFrom = currentUser.contactsRequestsFrom;
+    const requestReceived = contactsRequestFrom.some(
+      (result) => result.userIdFrom === searchResult.id,
+    );
+
+    if (requestReceived) {
+      jsonErrorResponses.usernameError =
+        'Request from username is pending your approval';
+      return res.json(jsonErrorResponses);
+    }
+
+    //check if username is already a contact
+    const contacts = currentUser.contacts;
+    const requestIsContact = contacts.some(
+      (result) => result.id === searchResult.id,
+    );
+
+    if (requestIsContact) {
+      jsonErrorResponses.usernameError = 'Username is already a contact';
+      return res.json(jsonErrorResponses);
+    }
+
+    return res.json([searchResult]);
   }),
 ];
 
 exports.sendContactRequestPOST = async (req, res, next) => {
-  const [currentUser, userToRequest] = await Promise.all([
-    User.findById(req.user.user._id),
-    User.findById(req.params.id).populate('contactsRequests'),
+  const getCurrentUser = prisma.user.findUnique({
+    where: { id: req.user.user.id },
+    include: {
+      contactsRequestsFrom: true,
+      contactsRequestsTo: true,
+      contacts: true,
+    },
+  });
+
+  const getTargetUser = prisma.user.findUnique({
+    where: { id: Number(req.params.id) },
+    include: { contactsRequestsFrom: true, contactsRequestsTo: true },
+  });
+
+  const [currentUser, targetUser] = await prisma.$transaction([
+    getCurrentUser,
+    getTargetUser,
   ]);
 
-  const { contactsRequests } = userToRequest;
+  const { contactsRequestsTo } = currentUser;
 
-  //check if request has already been made
-  for (const request of contactsRequests) {
-    if (request.username === currentUser.username)
+  //check if request has already been sent
+  for (const request of contactsRequestsTo) {
+    if (request.userIdTo === targetUser.id)
       return res.json('Request has already been made');
   }
 
   //check if already a contact
   for (const contacts of currentUser.contacts) {
-    if (contacts._id.toString() === req.params.id)
+    if (contacts.id.toString() === Number(req.params.id))
       return res.json('User is already in your contacts list.');
   }
 
   //check if requesting to self
-  if (currentUser._id.toString() === req.params.id)
+  if (currentUser.id.toString() === Number(req.params.id))
     return res.json('Cannot send request to yourself');
 
-  contactsRequests.push(currentUser);
-  await userToRequest.save();
-  return res.json(userToRequest);
+  await prisma.contactsRequests.create({
+    data: {
+      userIdFrom: currentUser.id,
+      userIdTo: targetUser.id,
+    },
+  });
+
+  return res.json(targetUser);
 };
 
-exports.handleRequestsPUT = async (req, res, next) => {
-  const currentUserId = req.user.user._id;
-  const [currentUser, requestingUser] = await Promise.all([
-    User.findById(currentUserId).populate('contactsRequests'),
-    User.findById(req.params.id),
-  ]);
+exports.handleRequestsPUT = [
+  body('action')
+    .trim()
+    .notEmpty()
+    .isAlpha()
+    .escape()
+    .withMessage('Action required'),
+  body('contactsRequestsId')
+    .trim()
+    .notEmpty()
+    .escape()
+    .withMessage('contactsRequestsId required'),
 
-  const { contactsRequests } = currentUser;
+  expressAsyncHandler(async (req, res, next) => {
+    const errors = validationResult(req);
 
-  for (const request of contactsRequests) {
-    if (
-      req.params.id === request._id.toString() &&
-      req.body.action === 'approve'
-    ) {
-      //add to currentUser's contacts list
-      currentUser.contacts.push(request);
+    const jsonErrorResponses = {
+      error: null,
+    };
 
-      //remove from currentUser's contactsRequest list
-      const targetIndex = contactsRequests.indexOf(request);
-      contactsRequests.splice(targetIndex, 1);
-
-      //add to contacts lists of requesting user
-      requestingUser.contacts.push(currentUser);
-
-      //remove from contactsRequest list of requesting user
-      const requestingTargetIndex =
-        requestingUser.contactsRequests.indexOf(currentUser);
-
-      requestingUser.contactsRequests.splice(requestingTargetIndex, 1);
-
-      await Promise.all([currentUser.save(), requestingUser.save()]);
-      return res.json(currentUser);
+    if (!errors.isEmpty()) {
+      jsonErrorResponses.error = errors.msg;
+      return res.json(jsonErrorResponses);
     }
 
-    if (
-      req.params.id === request._id.toString() &&
-      req.body.action === 'reject'
-    ) {
-      //remove from currentUser's contactsRequest list
-      const targetIndex = contactsRequests.indexOf(request);
-      contactsRequests.splice(targetIndex, 1);
+    const currentUserId = req.user.user.id;
 
-      //remove from contactsRequest list of requesting user
-      const requestingTargetIndex =
-        requestingUser.contactsRequests.indexOf(currentUser);
+    const getCurrentUser = prisma.user.findUnique({
+      where: { id: currentUserId },
+      include: {
+        contactsRequestsFrom: true,
+        contactsRequestsTo: true,
+        contacts: true,
+      },
+    });
 
-      requestingUser.contactsRequests.splice(requestingTargetIndex, 1);
+    const getRequestingUser = prisma.user.findUnique({
+      where: { id: Number(req.params.id) },
+      include: {
+        contactsRequestsFrom: true,
+        contactsRequestsTo: true,
+        contacts: true,
+      },
+    });
 
-      await Promise.all([currentUser.save(), requestingUser.save()]);
-      return res.json(currentUser);
+    const [currentUser, requestingUser] = await prisma.$transaction([
+      getCurrentUser,
+      getRequestingUser,
+    ]);
+
+    const deleteTargetContactsRequests = prisma.contactsRequests.delete({
+      where: { id: Number(req.body.contactsRequestsId) },
+    });
+
+    const updateCurrentUserApprove = prisma.user.update({
+      where: { id: currentUser.id },
+      data: {
+        contacts: { connect: { id: requestingUser.id } },
+      },
+    });
+
+    const updateRequestingUserApprove = prisma.user.update({
+      where: { id: requestingUser.id },
+      data: {
+        contacts: { connect: { id: currentUser.id } },
+      },
+    });
+
+    const getUpdatedCurrentUser = prisma.user.findUnique({
+      where: { id: currentUser.id },
+      include: {
+        contactsRequestsFrom: { include: { from: true } },
+        contactsRequestsTo: { include: { to: true } },
+        contacts: true,
+      },
+    });
+
+    if (req.body.action === 'approve') {
+      const results = await prisma.$transaction([
+        updateCurrentUserApprove,
+        updateRequestingUserApprove,
+        deleteTargetContactsRequests,
+        getUpdatedCurrentUser,
+      ]);
+
+      const updatedCurrentUser = results[3];
+      return res.json(updatedCurrentUser);
+    } else {
+      const results = await prisma.$transaction([
+        deleteTargetContactsRequests,
+        getUpdatedCurrentUser,
+      ]);
+      const updatedCurrentUser = results[1];
+      return res.json(updatedCurrentUser);
     }
-  }
-};
+  }),
+];
 
-//bug that sometimes occur. Target user deleted from currentUser's contact list, but currentUser not deleted from targetUser's contact list
 exports.deleteContact = async (req, res, next) => {
-  const [currentUser, targetUser] = await Promise.all([
-    User.findById(req.user.user._id).populate('contacts'),
-    User.findById(req.params.id).populate('contacts'),
+  const getCurrentUser = prisma.user.findUnique({
+    where: { id: req.user.user.id },
+    include: { contacts: true },
+  });
+
+  const getTargetUser = prisma.user.findUnique({
+    where: { id: Number(req.params.id) },
+    include: { contacts: true },
+  });
+
+  const [currentUser, targetUser] = await prisma.$transaction([
+    getCurrentUser,
+    getTargetUser,
   ]);
 
-  // Remove targetUser from currentUser's contact list
   const contactIndex = currentUser.contacts.findIndex(
-    (contact) => contact._id.toString() === req.params.id,
+    (contact) => contact.id === Number(req.params.id),
   );
 
   if (contactIndex > -1) {
-    currentUser.contacts.splice(contactIndex, 1);
+    // Remove targetUser from currentUser's contact list
+    const [contactToDeleteInCurrentUser] = currentUser.contacts.splice(
+      contactIndex,
+      1,
+    );
+
+    const updateContactsCurrentUser = prisma.user.update({
+      where: { id: currentUser.id },
+      data: {
+        contacts: { disconnect: { id: contactToDeleteInCurrentUser.id } },
+      },
+    });
 
     // Remove currentUser from targetUser's contact list
     const currentUserIndex = targetUser.contacts.findIndex(
-      (contact) => contact._id.toString() === currentUser._id.toString(),
+      (contact) => contact.id === currentUser.id,
     );
 
-    if (currentUserIndex > -1) {
-      targetUser.contacts.splice(currentUserIndex, 1);
-    }
+    const [contactToDeleteInTargetUser] = targetUser.contacts.splice(
+      currentUserIndex,
+      1,
+    );
 
-    await Promise.all([currentUser.save(), targetUser.save()]);
+    const updateContactsTargetUser = prisma.user.update({
+      where: { id: targetUser.id },
+      data: {
+        contacts: { disconnect: { id: contactToDeleteInTargetUser.id } },
+      },
+    });
+
+    await prisma.$transaction([
+      updateContactsCurrentUser,
+      updateContactsTargetUser,
+    ]);
+
     return res.json(currentUser);
   }
-
   return res.json('Contact not found!');
 };
 
 exports.groupGET = async (req, res, next) => {
-  const currentUser = await User.findById(req.user.user._id).populate(
-    'contacts',
-  );
+  const currentUser = await prisma.user.findUnique({
+    where: { id: req.user.user.id },
+    include: { contacts: true },
+  });
   return res.json(currentUser);
 };
 
 exports.groupPOST = [
   body('groupName')
-    .notEmpty()
     .trim()
+    .notEmpty()
     .escape()
-    .withMessage('Group name required'),
+    .withMessage('Group name cannot be empty or only empty spaces'),
   body('checkedUsers.*').escape(),
 
   async (req, res, next) => {
     const errors = validationResult(req);
 
     if (!errors.isEmpty()) {
-      return res.json(errors);
+      const errorsArray = errors.array();
+      return res.json({ error: errorsArray[0].msg });
     }
 
     if (req.body.checkedUsers.length < 2)
-      return res.json('Need more participants to create a group');
+      return res.json({ error: 'Need more participants to create a group' });
 
-    const [currentUser, invitedParticipants] = await Promise.all([
-      User.findById(req.user.user._id).populate('contacts'),
-      User.find({
-        username: { $in: req.body.checkedUsers },
-      }),
-    ]);
-
-    const newGroup = new Group({
-      groupName: req.body.groupName,
-      participants: [currentUser, ...invitedParticipants],
-      messages: [],
-      profilePic: null,
+    const currentUser = await prisma.user.findUnique({
+      where: { id: req.user.user.id },
     });
 
-    await newGroup.save();
+    const checkedContacts = await prisma.user.findMany({
+      where: { username: { in: req.body.checkedUsers } },
+    });
 
-    for (const participant of invitedParticipants) {
-      participant.groups.push(newGroup._id);
-      await participant.save();
-    }
+    const groupParticipants = [{ id: currentUser.id }];
 
-    currentUser.groups.push(newGroup._id);
-    await currentUser.save();
-    return res.json(currentUser);
+    checkedContacts.forEach((participant) =>
+      groupParticipants.push({ id: participant.id }),
+    );
+
+    await prisma.group.create({
+      data: {
+        groupName: req.body.groupName,
+        participants: {
+          connect: groupParticipants,
+        },
+      },
+    });
+
+    const updatedCurrentUser = await prisma.user.findUnique({
+      where: { id: req.user.user.id },
+      include: {
+        contactsRequestsFrom: true,
+        contactsRequestsTo: true,
+        contacts: { include: { messagesIn: true, messagesOut: true } },
+        groups: { include: { messages: { orderBy: { date: 'desc' } } } },
+      },
+    });
+
+    return res.json(updatedCurrentUser);
   },
 ];
 
 exports.exitGroup = async (req, res, next) => {
-  const [currentUser, group] = await Promise.all([
-    User.findById(req.user.user._id),
-    Group.findById(req.params.id),
-  ]);
-  const { participants } = group;
-  const { groups } = currentUser;
+  const currentUser = await prisma.user.findUnique({
+    where: { id: req.user.user.id },
+    include: { groups: true },
+  });
+
+  const targetGroupId = Number(req.params.id);
 
   //remove currentUser from groups participants
-  const updatedParticipants = participants.filter(
-    (participant) => participant.toString() !== currentUser._id.toString(),
-  );
-  group.participants = updatedParticipants;
+  await prisma.group.update({
+    where: { id: targetGroupId },
+    data: { participants: { disconnect: { id: currentUser.id } } },
+  });
 
-  if (group.participants.length < 1) {
-    await group.deleteOne({ _id: req.params.id });
-  } else {
-    group.save();
+  const updatedGroup = await prisma.group.findUnique({
+    where: { id: targetGroupId },
+    include: { participants: true },
+  });
+
+  const groupIsEmpty = updatedGroup.participants.length < 1;
+
+  const latestCurrentUser = await prisma.user.findUnique({
+    where: { id: req.user.user.id },
+    include: { groups: true },
+  });
+
+  if (groupIsEmpty) {
+    await prisma.group.delete({
+      where: { id: targetGroupId },
+    });
+    return res.json(latestCurrentUser);
   }
 
-  //remove group from currentUser's users group
-  const updatedGroups = groups.filter(
-    (group) => group.toString() !== req.params.id,
-  );
-  currentUser.groups = updatedGroups;
-  await currentUser.save();
-
-  return res.json(currentUser);
+  return res.json(latestCurrentUser);
 };
 
 exports.homeGET = async (req, res, next) => {
-  const currentUserObjectId = new mongoose.Types.ObjectId(req.user.user._id);
-  const currentUser = await User.findById(req.user.user._id)
-    .populate({
-      path: 'contacts',
-      populate: [
-        {
-          path: 'messages',
-          match: {
-            $or: [{ from: currentUserObjectId }, { to: currentUserObjectId }],
-          },
-          options: {
-            sort: { date: -1 },
-          },
-        },
-      ],
-    })
-    .populate({
-      path: 'groups',
-      populate: {
-        path: 'messages',
-        options: {
-          sort: { date: -1 },
+  const currentUser = await prisma.user.findUnique({
+    where: { id: req.user.user.id },
+    include: {
+      contactsRequestsFrom: true,
+      contactsRequestsTo: true,
+      contacts: {
+        include: {
+          messagesIn: { orderBy: { date: 'desc' } },
+          messagesOut: { orderBy: { date: 'desc' } },
         },
       },
-    });
+      groups: { include: { messages: { orderBy: { date: 'desc' } } } },
+    },
+  });
+
   return res.json(currentUser);
 };
 
 exports.idMessagesGET = async (req, res, next) => {
-  const currentUser = await User.findById(req.user.user._id)
-    .populate({
-      path: 'groups',
-      populate: [
-        { path: 'participants' },
-        { path: 'messages', populate: { path: 'from' } },
-      ],
-    })
-    .populate({
-      path: 'contacts',
-      populate: [{ path: 'username' }, { path: 'messages' }],
-    });
+  const currentUser = await prisma.user.findUnique({
+    where: { id: req.user.user.id },
+    include: {
+      contacts: { include: { messagesIn: true, messagesOut: true } },
+      groups: {
+        include: { participants: true, messages: { include: { from: true } } },
+      },
+    },
+  });
 
   //check if trying to access self
-  if (req.params.id === currentUser._id.toString())
-    return res.json('Cannot access to self');
+  const targetId = Number(req.params.id);
+  if (targetId === currentUser.id.toString())
+    return res.json({ error: 'Cannot access to self' });
 
   //check if targetId is a contact
   for (const contact of currentUser.contacts) {
-    if (contact._id.toString() === req.params.id) {
+    if (contact.id === targetId) {
       const targetMessages = contact.messages
         .sort((a, b) => b.date - a.date)
         .filter(
           (message) =>
-            message.from.toString() === currentUser._id.toString() ||
-            message.to.toString() === currentUser._id.toString(),
+            message.userIdFrom === currentUser.id ||
+            message.userIdTo === currentUser.id,
         );
 
       return res.json({
@@ -459,7 +605,7 @@ exports.idMessagesGET = async (req, res, next) => {
 
   //check if targetId is a group
   for (const group of currentUser.groups) {
-    if (group._id.toString() === req.params.id) {
+    if (group.id === targetId) {
       const targetMessages = group.messages.sort((a, b) => b.date - a.date);
       return res.json({
         groupName: group.groupName,
@@ -469,17 +615,26 @@ exports.idMessagesGET = async (req, res, next) => {
       });
     }
   }
-  return res.json('No messages found');
+  return res.json({ error: 'No messages found' });
 };
 
 exports.idMessagesPOST = [
-  body('newMessage').notEmpty().trim().escape().withMessage('Input required'),
+  body('newMessage').trim().notEmpty().escape().withMessage('Input required'),
 
   expressAsyncHandler(async (req, res, next) => {
-    const [currentUser, recipient, group] = await Promise.all([
-      User.findById(req.user.user._id).populate('messages'),
-      User.findById(req.params.id).populate('messages'),
-      Group.findById(req.params.id).populate('messages'),
+    const currentUserId = Number(req.user.user.id);
+    const recipientId = Number(req.params.id);
+
+    const getCurrentUser = prisma.user.findUnique({
+      where: { id: currentUserId },
+    });
+    const getRecipient = prisma.user.findUnique({ where: { id: recipientId } });
+    const getGroup = prisma.group.findUnique({ where: { id: recipientId } });
+
+    const [currentUser, recipient, group] = await prisma.$transaction([
+      getCurrentUser,
+      getRecipient,
+      getGroup,
     ]);
 
     const errors = validationResult(req);
@@ -488,70 +643,54 @@ exports.idMessagesPOST = [
       return res.json(errors);
     } else {
       //check if sending message to self
-      if (req.params.id === currentUser._id.toString())
+      if (recipient === currentUser.id)
         return res.json('Cannot send message to self');
 
       if (recipient && !group) {
-        const newMessage = new Message({
-          from: currentUser,
-          to: recipient,
-          content: he.decode(req.body.newMessage),
-          date: new Date(),
+        await prisma.message.create({
+          data: {
+            userIdFrom: currentUser.id,
+            userIdTo: recipient.id,
+            content: he.decode(req.body.newMessage),
+          },
         });
-
-        currentUser.messages.push(newMessage);
-        recipient.messages.push(newMessage);
-
-        await Promise.all([
-          newMessage.save(),
-          currentUser.save(),
-          recipient.save(),
-        ]);
       }
 
       if (!recipient && group) {
-        const newGroupMessage = new GroupMessages({
-          from: currentUser,
-          to: group,
-          content: he.decode(req.body.newMessage),
-          date: new Date(),
+        await prisma.groupMessages.create({
+          data: {
+            userIdFrom: currentUser.id,
+            groupIdTo: group.id,
+            content: he.decode(req.body.newMessage),
+          },
         });
-
-        currentUser.messages.push(newGroupMessage);
-        group.messages.push(newGroupMessage);
-
-        await Promise.all([
-          newGroupMessage.save(),
-          currentUser.save(),
-          group.save(),
-        ]);
       }
 
-      return res.redirect(`/messages/${req.params.id}`);
+      return res.redirect(`/messages/${recipientId}`);
     }
   }),
 ];
 
 exports.editProfile = [
-  body('newUsername').notEmpty().trim().escape().withMessage('Input required'),
-  body('newStatus').notEmpty().trim().escape().withMessage('Input required'),
+  body('newUsername').trim().notEmpty().escape().withMessage('Input required'),
+  body('newStatus').trim().notEmpty().escape().withMessage('Input required'),
 
   expressAsyncHandler(async (req, res, next) => {
     const errors = validationResult(req);
 
+    const pic = req.file ? await uploadImage(req.file.path) : null;
     if (!errors.isEmpty()) {
       return res.json(errors);
     } else {
-      const currentUser = await User.findByIdAndUpdate(
-        req.user.user._id,
-        {
+      const updatedUser = await prisma.user.update({
+        where: { id: req.user.user.id },
+        data: {
           username: req.body.newUsername,
           status: he.decode(req.body.newStatus),
-          profilePic: req.file ? await uploadImage(req.file.path) : null,
+          profilePic: pic ? pic.url : null,
         },
-        { new: true },
-      );
-      return res.json(currentUser);
+      });
+      return res.json(updatedUser);
     }
   }),
 ];
