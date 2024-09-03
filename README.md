@@ -4,7 +4,8 @@ This is the client-side repo of a full-stack messaging app with real-time chat f
 
 Front-end: React + Typescript + Socket.io
 Back-end: NodeJS + Express
-Database: MongoDB
+Database: PostgreSQL + Prisma
+Hosted on: Adaptable
 
 The frontend repo: https://github.com/Stalloyde/messagingapp-client
 
