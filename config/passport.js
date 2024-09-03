@@ -3,7 +3,6 @@ const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 const passport = require('passport');
 const JwtStrategy = require('passport-jwt').Strategy;
-const GithubStrategy = require('passport-github2').Strategy;
 const { ExtractJwt } = require('passport-jwt');
 
 const options = {};
