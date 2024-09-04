@@ -15,7 +15,7 @@ datasource db {
 }
 
 model Group {
-  id            Int             @id @default(autoincrement())
+  id            String            @id @default(uuid())
   groupName     String  
   participants  User[]         
   messages      GroupMessages[] 
@@ -27,7 +27,7 @@ model GroupMessages {
   from        User      @relation(fields:[userIdFrom], references: [id])
   userIdFrom  Int
   to          Group     @relation(fields:[groupIdTo], references: [id], onDelete:Cascade)
-  groupIdTo   Int
+  groupIdTo   String
   content     String
   date        DateTime  @default(now())
 }
