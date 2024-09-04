@@ -23,6 +23,9 @@ const limiter = RateLimit({
   max: 300,
 });
 
+// Trust the first proxy (useful for production setups behind proxies)
+app.set('trust proxy', 1);
+
 const corsOptions = {
   origin: [
     //add deployed url here when in production
@@ -32,6 +35,7 @@ const corsOptions = {
     'http://localhost:3000',
   ],
   optionsSuccessStatus: 200,
+  credentials: true,
 };
 
 app.use(logger('dev'));
@@ -64,6 +68,7 @@ const io = new Server(server, {
       'http://localhost:3000',
     ],
     methods: ['GET', 'POST'],
+    credentials: true,
   },
 });
 
