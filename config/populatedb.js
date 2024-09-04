@@ -5,17 +5,17 @@ const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 
 async function main() {
-  // const deleteUsers = prisma.user.deleteMany();
-  // const deleteMessage = prisma.message.deleteMany();
+  const deleteUsers = prisma.user.deleteMany();
+  const deleteMessage = prisma.message.deleteMany();
   const deleteGroup = prisma.group.deleteMany();
   const deleteGroupMessages = prisma.groupMessages.deleteMany();
 
   // The transaction runs synchronously so deleteFolder must run last.
   await prisma.$transaction([
-    // deleteMessage,
+    deleteMessage,
     deleteGroupMessages,
     deleteGroup,
-    // deleteUsers,
+    deleteUsers,
   ]);
 
   // await prisma.user.createMany({

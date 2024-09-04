@@ -519,7 +519,7 @@ exports.exitGroup = async (req, res, next) => {
     include: { groups: true },
   });
 
-  const targetGroupId = Number(req.params.id);
+  const targetGroupId = req.params.id;
 
   //remove currentUser from groups participants
   await prisma.group.update({
@@ -583,7 +583,7 @@ exports.idMessagesGET = async (req, res, next) => {
 
   //check if trying to access self
   const targetId = Number(req.params.id);
-  if (targetId === currentUser.id.toString())
+  if (targetId === currentUser.id)
     return res.json({ error: 'Cannot access to self' });
 
   //check if targetId is a contact
@@ -607,7 +607,7 @@ exports.idMessagesGET = async (req, res, next) => {
 
   //check if targetId is a group
   for (const group of currentUser.groups) {
-    if (group.id === targetId) {
+    if (group.id === req.params.id.toString()) {
       const targetMessages = group.messages.sort((a, b) => b.date - a.date);
       return res.json({
         groupName: group.groupName,
@@ -627,18 +627,20 @@ exports.idMessagesPOST = [
     const currentUserId = Number(req.user.user.id);
     const recipientId = Number(req.params.id);
 
-    const getCurrentUser = prisma.user.findUnique({
+    const currentUser = await prisma.user.findUnique({
       where: { id: currentUserId },
     });
-    const getRecipient = prisma.user.findUnique({ where: { id: recipientId } });
-    const getGroup = prisma.group.findUnique({ where: { id: recipientId } });
 
-    const [currentUser, recipient, group] = await prisma.$transaction([
-      getCurrentUser,
-      getRecipient,
-      getGroup,
-    ]);
+    const group = await prisma.group.findUnique({
+      where: { id: req.params.id.toString() },
+    });
 
+    let recipient;
+    if (recipientId) {
+      recipient = await prisma.user.findUnique({
+        where: { id: recipientId },
+      });
+    }
     const errors = validationResult(req);
 
     if (!errors.isEmpty()) {
@@ -668,7 +670,7 @@ exports.idMessagesPOST = [
         });
       }
 
-      return res.redirect(`/messages/${recipientId}`);
+      return res.redirect(`/messages/${req.params.id}`);
     }
   }),
 ];
