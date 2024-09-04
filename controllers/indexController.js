@@ -567,6 +567,22 @@ exports.homeGET = async (req, res, next) => {
     },
   });
 
+  for (const contact of currentUser.contacts) {
+    let filteredMessages = [];
+
+    for (const msg of contact.messages) {
+      if (
+        (msg.userIdFrom === contact.id && msg.userIdTo === req.user.user.id) ||
+        (msg.userIdFrom === req.user.user.id && msg.userIdTo === contact.id)
+      ) {
+        filteredMessages.push(msg);
+      }
+    }
+
+    filteredMessages.sort((a, b) => b.date - a.date);
+    contact.messages = filteredMessages;
+  }
+
   return res.json(currentUser);
 };
 
@@ -581,6 +597,7 @@ exports.idMessagesGET = async (req, res, next) => {
     },
   });
 
+  console.log(currentUser);
   //check if trying to access self
   const targetId = Number(req.params.id);
   if (targetId === currentUser.id)
