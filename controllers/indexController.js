@@ -557,13 +557,12 @@ exports.homeGET = async (req, res, next) => {
       contactsRequestsTo: true,
       contacts: {
         include: {
-          id: true,
           messagesIn: { orderBy: { date: 'desc' } },
           messagesOut: { orderBy: { date: 'desc' } },
         },
       },
       groups: {
-        include: { id: true, messages: { orderBy: { date: 'desc' } } },
+        include: { messages: { orderBy: { date: 'desc' } } },
       },
     },
   });

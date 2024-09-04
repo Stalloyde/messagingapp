@@ -23,9 +23,6 @@ const limiter = RateLimit({
   max: 300,
 });
 
-// Trust the first proxy (useful for production setups behind proxies)
-app.set('trust proxy', 1);
-
 const corsOptions = {
   origin: [
     //add deployed url here when in production
@@ -43,7 +40,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 app.use(cookieParser());
 app.use(compression());
-// app.use(helmet());
+app.use(helmet());
 app.use(limiter);
 app.use(express.static(path.join(__dirname, 'public')));
 app.use(
