@@ -98,6 +98,7 @@ exports.loginPOST = [
   body('password').trim().notEmpty().escape().withMessage('*Password required'),
 
   expressAsyncHandler(async (req, res, next) => {
+    console.log('1');
     const errors = validationResult(req);
     const jsonErrorResponses = {
       passwordError: null,
@@ -105,13 +106,17 @@ exports.loginPOST = [
     };
 
     if (!errors.isEmpty()) {
+      console.log('2');
       const errorsArray = errors.array();
+      console.log(errorsArray);
       errorsArray.forEach((error) => {
         if (error.path === 'username')
           jsonErrorResponses.usernameError = error.msg;
         if (error.path === 'password')
           jsonErrorResponses.passwordError = error.msg;
       });
+      console.log('3');
+      console.log(jsonErrorResponses);
       return res.json(jsonErrorResponses);
     }
 
@@ -120,14 +125,24 @@ exports.loginPOST = [
       select: { id: true, username: true, password: true },
     });
 
+    console.log(4);
+    console.log(user);
+
     if (!user) {
       jsonErrorResponses.usernameError = '*User not found';
+      console.log(5);
+      console.log(jsonErrorResponses);
       return res.json(jsonErrorResponses);
     }
 
     const match = await bcrypt.compare(req.body.password, user.password);
+    console.log(5);
+    console.log(match);
+
     if (!match) {
       jsonErrorResponses.passwordError = '*Incorrect password';
+      console.log(6);
+      console.log(jsonErrorResponses);
       return res.json(jsonErrorResponses);
     }
 
@@ -137,6 +152,8 @@ exports.loginPOST = [
       { expiresIn: '1h', algorithm: 'HS256' },
       (err, token) => {
         if (err) {
+          console.log(7);
+          console.log(err);
           throw Error(err);
         } else {
           const { username } = user;
@@ -597,7 +614,6 @@ exports.idMessagesGET = async (req, res, next) => {
     },
   });
 
-  console.log(currentUser);
   //check if trying to access self
   const targetId = Number(req.params.id);
   if (targetId === currentUser.id)
