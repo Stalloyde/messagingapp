@@ -27,6 +27,16 @@ const bcrypt = require('bcrypt');
 const uploadImage = require('../config/cloudinary.js');
 const he = require('he');
 
+function cleanUserData(user) {
+  return {
+    ...user,
+    contacts: user.contacts.map((contact) => {
+      const { messagesIn, messagesOut, ...cleanContact } = contact;
+      return cleanContact;
+    }),
+  };
+}
+
 exports.signupGET = async (req, res, next) => {
   return res.json({ message: 'GET - Sign Up page' });
 };
@@ -147,17 +157,17 @@ exports.loginPOST = [
   }),
 ];
 
-exports.contactRequestsGET = async (req, res, next) => {
-  const currentUser = await prisma.user.findUnique({
-    where: { id: req.user.user.id },
-    include: {
-      contactsRequestsFrom: { include: { from: true } },
-      contactsRequestsTo: { include: { to: true } },
-      contacts: true,
-    },
-  });
-  return res.json(currentUser);
-};
+// exports.contactRequestsGET = async (req, res, next) => {
+//   const currentUser = await prisma.user.findUnique({
+//     where: { id: req.user.user.id },
+//     include: {
+//       contactsRequestsFrom: { include: { from: true } },
+//       contactsRequestsTo: { include: { to: true } },
+//       contacts: true,
+//     },
+//   });
+//   return res.json(currentUser);
+// };
 
 exports.searchUsernamePOST = [
   body('username').trim().notEmpty().escape().withMessage('*Username required'),
@@ -363,7 +373,18 @@ exports.handleRequestsPUT = [
       include: {
         contactsRequestsFrom: { include: { from: true } },
         contactsRequestsTo: { include: { to: true } },
-        contacts: true,
+        contacts: {
+          include: {
+            messagesIn: { orderBy: { date: 'desc' } },
+            messagesOut: { orderBy: { date: 'desc' } },
+          },
+        },
+        groups: {
+          include: {
+            messages: { include: { from: true }, orderBy: { date: 'desc' } },
+            participants: true,
+          },
+        },
       },
     });
 
@@ -376,14 +397,16 @@ exports.handleRequestsPUT = [
       ]);
 
       const updatedCurrentUser = results[3];
-      return res.json(updatedCurrentUser);
+      const cleanedUser = cleanUserData(updatedCurrentUser);
+      return res.json(cleanedUser);
     } else {
       const results = await prisma.$transaction([
         deleteTargetContactsRequests,
         getUpdatedCurrentUser,
       ]);
       const updatedCurrentUser = results[1];
-      return res.json(updatedCurrentUser);
+      const cleanedUser = cleanUserData(updatedCurrentUser);
+      return res.json(cleanedUser);
     }
   }),
 ];
@@ -439,23 +462,47 @@ exports.deleteContact = async (req, res, next) => {
       },
     });
 
-    await prisma.$transaction([
+    const getUpdatedCurrentUser = prisma.user.findUnique({
+      where: { id: req.user.user.id },
+      include: {
+        contactsRequestsFrom: { include: { from: true } },
+        contactsRequestsTo: { include: { to: true } },
+        contacts: {
+          include: {
+            messagesIn: { orderBy: { date: 'desc' } },
+            messagesOut: { orderBy: { date: 'desc' } },
+          },
+        },
+        groups: {
+          include: {
+            messages: { include: { from: true }, orderBy: { date: 'desc' } },
+            participants: true,
+          },
+        },
+      },
+    });
+
+    const results = await prisma.$transaction([
       updateContactsCurrentUser,
       updateContactsTargetUser,
+      getUpdatedCurrentUser,
     ]);
 
-    return res.json(currentUser);
+    const updatedCurrentUser = results[2];
+    const cleanedUser = cleanUserData(updatedCurrentUser);
+    console.log(cleanedUser);
+    return res.json(cleanedUser);
   }
   return res.json('Contact not found!');
 };
 
-exports.groupGET = async (req, res, next) => {
-  const currentUser = await prisma.user.findUnique({
-    where: { id: req.user.user.id },
-    include: { contacts: true },
-  });
-  return res.json(currentUser);
-};
+// exports.groupGET = async (req, res, next) => {
+//   const currentUser = await prisma.user.findUnique({
+//     where: { id: req.user.user.id },
+//     include: { contacts: true },
+//   });
+//   return res.json(currentUser);
+// };
 
 exports.groupPOST = [
   body('groupName')
@@ -502,14 +549,30 @@ exports.groupPOST = [
     const updatedCurrentUser = await prisma.user.findUnique({
       where: { id: req.user.user.id },
       include: {
-        contactsRequestsFrom: true,
-        contactsRequestsTo: true,
-        contacts: { include: { messagesIn: true, messagesOut: true } },
-        groups: { include: { messages: { orderBy: { date: 'desc' } } } },
+        contactsRequestsFrom: { include: { from: true } },
+        contactsRequestsTo: { include: { to: true } },
+        contacts: {
+          include: {
+            messagesIn: {
+              where: { userIdFrom: req.user.user.id }, // Filter messages where the current user is the sender
+              orderBy: { date: 'desc' },
+            },
+            messagesOut: {
+              where: { userIdTo: req.user.user.id }, // Filter messages where the current user is the receiver
+              orderBy: { date: 'desc' },
+            },
+          },
+        },
+        groups: {
+          include: {
+            messages: { include: { from: true }, orderBy: { date: 'desc' } },
+            participants: true,
+          },
+        },
       },
     });
-
-    return res.json(updatedCurrentUser);
+    const cleanedUser = cleanUserData(updatedCurrentUser);
+    return res.json(cleanedUser);
   },
 ];
 
@@ -534,27 +597,50 @@ exports.exitGroup = async (req, res, next) => {
 
   const groupIsEmpty = updatedGroup.participants.length < 1;
 
-  const latestCurrentUser = await prisma.user.findUnique({
-    where: { id: req.user.user.id },
-    include: { groups: true },
-  });
-
   if (groupIsEmpty) {
     await prisma.group.delete({
       where: { id: targetGroupId },
     });
-    return res.json(latestCurrentUser);
   }
 
-  return res.json(latestCurrentUser);
+  const updatedCurrentUser = await prisma.user.findUnique({
+    where: { id: req.user.user.id },
+    include: {
+      contactsRequestsFrom: { include: { from: true } },
+      contactsRequestsTo: { include: { to: true } },
+      contacts: {
+        include: {
+          messagesIn: {
+            where: { userIdFrom: req.user.user.id }, // Filter messages where the current user is the sender
+            orderBy: { date: 'desc' },
+          },
+          messagesOut: {
+            where: { userIdTo: req.user.user.id }, // Filter messages where the current user is the receiver
+            orderBy: { date: 'desc' },
+          },
+        },
+      },
+      groups: {
+        include: {
+          messages: { include: { from: true }, orderBy: { date: 'desc' } },
+          participants: true,
+        },
+      },
+    },
+  });
+
+  console.log(updatedCurrentUser);
+
+  const cleanedUser = cleanUserData(updatedCurrentUser);
+  return res.json(cleanedUser);
 };
 
 exports.homeGET = async (req, res, next) => {
   const currentUser = await prisma.user.findUnique({
     where: { id: req.user.user.id },
     include: {
-      contactsRequestsFrom: true,
-      contactsRequestsTo: true,
+      contactsRequestsFrom: { include: { from: true } },
+      contactsRequestsTo: { include: { to: true } },
       contacts: {
         include: {
           messagesIn: { orderBy: { date: 'desc' } },
@@ -562,7 +648,10 @@ exports.homeGET = async (req, res, next) => {
         },
       },
       groups: {
-        include: { messages: { orderBy: { date: 'desc' } } },
+        include: {
+          messages: { include: { from: true }, orderBy: { date: 'desc' } },
+          participants: true,
+        },
       },
     },
   });
@@ -583,16 +672,33 @@ exports.homeGET = async (req, res, next) => {
     contact.messages = filteredMessages;
   }
 
-  return res.json(currentUser);
+  const cleanedUser = cleanUserData(currentUser);
+  return res.json(cleanedUser);
 };
 
 exports.idMessagesGET = async (req, res, next) => {
   const currentUser = await prisma.user.findUnique({
     where: { id: req.user.user.id },
     include: {
-      contacts: { include: { messagesIn: true, messagesOut: true } },
+      contactsRequestsFrom: { include: { from: true } },
+      contactsRequestsTo: { include: { to: true } },
+      contacts: {
+        include: {
+          messagesIn: {
+            where: { userIdFrom: req.user.user.id }, // Filter messages where the current user is the sender
+            orderBy: { date: 'desc' },
+          },
+          messagesOut: {
+            where: { userIdTo: req.user.user.id }, // Filter messages where the current user is the receiver
+            orderBy: { date: 'desc' },
+          },
+        },
+      },
       groups: {
-        include: { participants: true, messages: { include: { from: true } } },
+        include: {
+          messages: { include: { from: true }, orderBy: { date: 'desc' } },
+          participants: true,
+        },
       },
     },
   });
@@ -686,7 +792,33 @@ exports.idMessagesPOST = [
         });
       }
 
-      return res.redirect(`/messages/${req.params.id}`);
+      const updatedCurrentUser = await prisma.user.findUnique({
+        where: { id: req.user.user.id },
+        include: {
+          contactsRequestsFrom: { include: { from: true } },
+          contactsRequestsTo: { include: { to: true } },
+          contacts: {
+            include: {
+              messagesIn: {
+                where: { userIdFrom: req.user.user.id }, // Filter messages where the current user is the sender
+                orderBy: { date: 'desc' },
+              },
+              messagesOut: {
+                where: { userIdTo: req.user.user.id }, // Filter messages where the current user is the receiver
+                orderBy: { date: 'desc' },
+              },
+            },
+          },
+          groups: {
+            include: {
+              messages: { include: { from: true }, orderBy: { date: 'desc' } },
+              participants: true,
+            },
+          },
+        },
+      });
+      const cleanedUser = cleanUserData(updatedCurrentUser);
+      return res.json(cleanedUser);
     }
   }),
 ];
@@ -704,6 +836,28 @@ exports.editProfile = [
     } else {
       const updatedUser = await prisma.user.update({
         where: { id: req.user.user.id },
+        include: {
+          contactsRequestsFrom: { include: { from: true } },
+          contactsRequestsTo: { include: { to: true } },
+          contacts: {
+            include: {
+              messagesIn: {
+                where: { userIdFrom: req.user.user.id }, // Filter messages where the current user is the sender
+                orderBy: { date: 'desc' },
+              },
+              messagesOut: {
+                where: { userIdTo: req.user.user.id }, // Filter messages where the current user is the receiver
+                orderBy: { date: 'desc' },
+              },
+            },
+          },
+          groups: {
+            include: {
+              messages: { include: { from: true }, orderBy: { date: 'desc' } },
+              participants: true,
+            },
+          },
+        },
         data: {
           username: req.body.newUsername,
           status: he.decode(req.body.newStatus),
