@@ -5,15 +5,15 @@ const multer = require('multer');
 const upload = multer({ dest: 'public/images/uploads/' });
 const indexController = require('../controllers/indexController');
 
-router.get('/signup', indexController.signupGET);
+// router.get('/signup', indexController.signupGET);
 router.post('/signup', indexController.signupPOST);
 router.post('/login', indexController.loginPOST);
 
-router.get(
-  '/requests',
-  passport.authenticate('jwt', { session: false }),
-  indexController.contactRequestsGET,
-);
+// router.get(
+//   '/requests',
+//   passport.authenticate('jwt', { session: false }),
+//   indexController.contactRequestsGET,
+// );
 
 router.post(
   '/requests',
@@ -39,11 +39,11 @@ router.delete(
   indexController.deleteContact,
 );
 
-router.get(
-  '/group',
-  passport.authenticate('jwt', { session: false }),
-  indexController.groupGET,
-);
+// router.get(
+//   '/group',
+//   passport.authenticate('jwt', { session: false }),
+//   indexController.groupGET,
+// );
 
 router.post(
   '/group',
