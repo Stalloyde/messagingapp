@@ -490,7 +490,6 @@ exports.deleteContact = async (req, res, next) => {
 
     const updatedCurrentUser = results[2];
     const cleanedUser = cleanUserData(updatedCurrentUser);
-    console.log(cleanedUser);
     return res.json(cleanedUser);
   }
   return res.json('Contact not found!');
@@ -628,8 +627,6 @@ exports.exitGroup = async (req, res, next) => {
       },
     },
   });
-
-  console.log(updatedCurrentUser);
 
   const cleanedUser = cleanUserData(updatedCurrentUser);
   return res.json(cleanedUser);
