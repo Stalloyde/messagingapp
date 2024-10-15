@@ -157,18 +157,6 @@ exports.loginPOST = [
   }),
 ];
 
-// exports.contactRequestsGET = async (req, res, next) => {
-//   const currentUser = await prisma.user.findUnique({
-//     where: { id: req.user.user.id },
-//     include: {
-//       contactsRequestsFrom: { include: { from: true } },
-//       contactsRequestsTo: { include: { to: true } },
-//       contacts: true,
-//     },
-//   });
-//   return res.json(currentUser);
-// };
-
 exports.searchUsernamePOST = [
   body('username').trim().notEmpty().escape().withMessage('*Username required'),
 
@@ -494,14 +482,6 @@ exports.deleteContact = async (req, res, next) => {
   }
   return res.json('Contact not found!');
 };
-
-// exports.groupGET = async (req, res, next) => {
-//   const currentUser = await prisma.user.findUnique({
-//     where: { id: req.user.user.id },
-//     include: { contacts: true },
-//   });
-//   return res.json(currentUser);
-// };
 
 exports.groupPOST = [
   body('groupName')
